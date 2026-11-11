@@ -1,0 +1,34 @@
+Redesign the layout and interaction of THE ARRIVALS BOARD (src/sections/Arrivals.jsx).
+Keep the data schema, arrivals.json, the SAMPLE tags and warning, the
+"ARRIVALS LOGGED" counter, the legal line, the YOUR BANK last row, the flipping
+text on entry and all existing assets. No logos. No new dependencies. All text
+in copy.js with plain labels.
+
+DESKTOP (900px and wider): two columns.
+- Left: the board with filter chips ALL, ARRIVED, PILOT, ANNOUNCED (each with a
+  count), a sort toggle (newest or oldest), and the rows. A thin bronze marker
+  points at the selected row. Up and Down arrow keys move between rows.
+- Right, sticky: a RECEIPT PRINTER. A dark slot graphic at the top. When a row is
+  selected, a paper receipt feeds out of the slot in steps (about 700ms, stepped
+  easing) showing headline, date, who posted it, source type, optional screenshot,
+  and the VIEW SOURCE button. After it prints, the red stamp SOURCE ATTACHED lands.
+  Beside the printer, a framed reaction image of the bull (bull-smug) crossfades in
+  after the stamp. For the YOUR BANK row, use bull-browraise and no source.
+  Selecting another row tears the old receipt off (it drops away) and prints the
+  new one.
+
+MOBILE: the board is full width. Tapping a row opens the receipt in a bottom sheet
+(about 75dvh max) that slides up with a grab handle. The same print animation plays
+inside it. Close by tapping outside, swiping down, pressing Esc, or a Close button.
+Lock the page scroll behind it. The reaction image sits at the top of the sheet.
+
+EXTRA
+- A "now boarding" line above the board that cycles through the real rows every 4
+  seconds like an airport announcement, and stops as soon as the visitor interacts.
+  Tapping it opens that row. Do not include placeholder rows in the cycle once real
+  rows exist.
+- An empty filter result shows one plain line.
+- Keep real buttons, aria-expanded or aria-selected, visible focus, 44px targets.
+- Reduced motion: no flipping, no paper feed, receipt appears instantly.
+
+Do not change what any row says. Never add institutions or claims.

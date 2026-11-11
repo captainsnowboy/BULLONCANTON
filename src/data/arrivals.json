@@ -1,0 +1,38 @@
+[
+  {
+    "id": "sample-inst-a",
+    "institution": "Sample Institution A",
+    "headline": "Completed live atomic settlement pilot on Canton Network",
+    "date": "2026-11-10",
+    "source": "https://example.com/press-release-sample-a",
+    "sourceBy": "Sample Institution A Press Office",
+    "sourceType": "press release",
+    "status": "ARRIVED",
+    "image": "",
+    "placeholder": true
+  },
+  {
+    "id": "sample-inst-b",
+    "institution": "Sample Institution B",
+    "headline": "Initiated multi-asset cross-border liquidity trial onchain",
+    "date": "2026-11-10",
+    "source": "https://example.com/announcement-sample-b",
+    "sourceBy": "Sample Institution B Digital Assets Lead",
+    "sourceType": "official",
+    "status": "PILOT",
+    "image": "",
+    "placeholder": true
+  },
+  {
+    "id": "sample-inst-c",
+    "institution": "Sample Institution C",
+    "headline": "Formally committed exploration framework for tokenized deposits",
+    "date": "2026-11-10",
+    "source": "https://example.com/media-report-sample-c",
+    "sourceBy": "Financial Wire Services",
+    "sourceType": "media report",
+    "status": "ANNOUNCED",
+    "image": "",
+    "placeholder": true
+  }
+]

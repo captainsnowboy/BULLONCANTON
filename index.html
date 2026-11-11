@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      // Prevent browser extension injection conflicts (e.g. multiple crypto wallet extensions redefining window.ethereum)
+      (function() {
+        try {
+          let _eth = window.ethereum;
+          Object.defineProperty(window, 'ethereum', {
+            configurable: true,
+            enumerable: true,
+            get: function() { return _eth; },
+            set: function(val) { _eth = val; }
+          });
+        } catch (_) {}
+
+        window.addEventListener('error', function(e) {
+          if (
+            (e.filename && e.filename.indexOf('chrome-extension://') !== -1) ||
+            (e.message && e.message.indexOf('Cannot redefine property: ethereum') !== -1) ||
+            (e.error && e.error.stack && e.error.stack.indexOf('chrome-extension://') !== -1)
+          ) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            return true;
+          }
+        }, true);
+
+        window.addEventListener('unhandledrejection', function(e) {
+          if (
+            (e.reason && e.reason.stack && e.reason.stack.indexOf('chrome-extension://') !== -1) ||
+            (e.reason && e.reason.message && e.reason.message.indexOf('Cannot redefine property: ethereum') !== -1)
+          ) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+          }
+        }, true);
+      })();
+    </script>
+    <title>BULL ON CANTON | THE BULLS ARE ONCHAIN.</title>
+    <meta name="description" content="THE WALLSTREET IS ONCHAIN" />
+    <link rel="icon" type="image/png" href="/assets/favicon.png" />
+    <meta property="og:title" content="BULL ON CANTON | THE BULLS ARE ONCHAIN." />
+    <meta property="og:description" content="THE WALLSTREET IS ONCHAIN" />
+    <meta property="og:image" content="/assets/og-image.jpg" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="BULL ON CANTON | THE BULLS ARE ONCHAIN." />
+    <meta name="twitter:description" content="THE WALLSTREET IS ONCHAIN" />
+    <meta name="twitter:image" content="/assets/og-image.jpg" />
+    <meta name="theme-color" content="#000000" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

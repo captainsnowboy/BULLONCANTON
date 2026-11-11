@@ -1,0 +1,27 @@
+Change only the layout of THE MEME DESK (src/sections/MemeDesk.jsx). Keep all
+drawing code, templates, exports and copy exactly as they are. No new dependencies.
+
+PROBLEM
+The preview scrolls out of view while the visitor edits. Fix it so the preview is
+always visible.
+
+MOBILE (under 900px)
+- Put the preview in a sticky block at the top of the section (position: sticky,
+  top: 8px, z-index above the controls, with a frame). Not position: fixed. Its
+  height is at most 42dvh and the canvas scales to fit inside without cropping, for
+  both the square and the portrait templates. Use dvh, not vh.
+- Under it, the controls become three tabs: 1 PICK, 2 WRITE, 3 SEND. Only one panel
+  shows at a time, so the section is short. Each panel has a small NEXT button.
+- The page scrolls normally. No nested scroll area.
+- Typing must work with the keyboard open: the preview stays visible above the keyboard.
+- Leave room at the bottom so the fixed ticker and the floating sound button never
+  cover the Send buttons.
+- The draggable stamp: only the stamp itself uses touch-action: none, not the canvas
+  or the page.
+
+DESKTOP (900px and wider)
+- Two columns: the preview sticky on the left (top: 24px), the tabs or all three
+  steps stacked on the right.
+
+Keep the preview updating live as before. If the sticky block does not stick,
+check that no parent has overflow: hidden and fix that parent.

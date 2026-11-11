@@ -1,0 +1,100 @@
+@import "tailwindcss";
+@import "@fontsource/anton/400.css";
+@import "@fontsource/playfair-display/400.css";
+@import "@fontsource/playfair-display/700.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/600.css";
+
+:root {
+  --color-ink: #0E0D0C;
+  --color-bronze: #C97B1A;
+  --color-gold: #F2B24A;
+  --color-newsprint: #E8DFC9;
+  --color-stamp: #C23B22;
+  --color-ticker-green: #2FD27A;
+}
+
+body {
+  background-color: #000000;
+  color: var(--color-newsprint);
+  font-family: 'IBM Plex Mono', monospace;
+  overflow-x: clip;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-anton {
+  font-family: 'Anton', sans-serif;
+  letter-spacing: 0.03em;
+}
+
+.font-playfair {
+  font-family: 'Playfair Display', serif;
+}
+
+.font-plex {
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+/* Comic halftone dot texture overlay (no gradients, purely patterned dots) */
+.halftone-overlay {
+  background-image: radial-gradient(#221c16 0.75px, transparent 0.75px);
+  background-size: 8px 8px;
+  pointer-events: none;
+}
+
+/* Comic film grain filter */
+.comic-grain {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  opacity: 0.04;
+  z-index: 99;
+}
+
+/* Mask to softly fade edges of bull image into pure black (#000000) */
+.bull-mask {
+  mask-image: radial-gradient(circle at 50% 50%, black 50%, rgba(0, 0, 0, 0.85) 68%, transparent 95%);
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, black 50%, rgba(0, 0, 0, 0.85) 68%, transparent 95%);
+}
+
+/* Stamp Slam Animation */
+@keyframes stampSlam {
+  0% {
+    transform: scale(3) rotate(-18deg);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(0.92) rotate(-9deg);
+    opacity: 1;
+  }
+  80% {
+    transform: scale(1.04) rotate(-11deg);
+  }
+  100% {
+    transform: scale(1) rotate(-10deg);
+    opacity: 1;
+  }
+}
+
+.animate-stamp {
+  animation: stampSlam 0.28s cubic-bezier(0.2, 0.85, 0.32, 1.2) forwards;
+}
+
+/* Prefers reduced motion overrides */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-stamp {
+    animation: none !important;
+    transform: rotate(-10deg) !important;
+    opacity: 1 !important;
+  }
+}

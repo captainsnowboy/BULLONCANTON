@@ -1,0 +1,167 @@
+TASK: Rebuild the wall, the bull's motion and the ram sequence in THE CHARGE
+section (src/sections/Charge.jsx). Prerequisite: the layout and intro task is done.
+Touch nothing outside this section (plus its copy.js strings and README). No new
+dependencies, no Three.js. Keep all existing copy. Keep the closing scene (bull-standing
+and its text) and the RUN IT BACK button, only reconnect them to the new engine.
+Animate only transform and opacity (SVG transforms count). No new image files: the wall
+and sign are drawn in code.
+
+THE LOOK
+A bull in a suit sprints along the ground, rams a thick, real-looking brick wall,
+bounces off, comes back and rams again. Each hit adds cracks. The WALL ST. street sign
+above the wall shakes and gets knocked loose. On the final hit the wall bursts. The wall
+must read as a solid 3D object (front face, a side face with thickness, a stone top cap,
+a ground shadow), drawn in the flat, thick-outline ink style of the bull art. NO grid of
+square tiles or dots: it must look like staggered brickwork.
+
+1. ENGINE (one engine, two inputs)
+- Constants at the top of the file: HOLD_SECONDS = 5; RAM_THRESHOLDS = [0.62, 0.78,
+  0.90]; BREACH = 1; BRICK_CAP = 60.
+- Inputs only set `target` (0 to 1). Mobile (under 768px): holding the button raises
+  target by 1/HOLD_SECONDS per second; releasing lowers it by 0.12 per second but never
+  below the last ram threshold already reached. Desktop (768px and up): ScrollTrigger
+  pins the section (about +=350% scroll) and maps scroll to target.
+- `shown` follows `target`. It is blocked at a threshold while that ram's animation
+  plays (about 1.3s), then continues.
+- damageLevel = how many thresholds `shown` has passed (0 to 3). When it goes up, play
+  that ram once. When it goes down (desktop scrolling back), fade the cracks out in
+  300ms with no bull animation. If several thresholds are jumped at once, play only the
+  highest ram and set the damage to match.
+- Do NOT keep progress in React state. Keep it in refs and update the DOM with GSAP, so
+  there are no re-renders per frame.
+
+2. SIZES (compute in px from --sw and --sh, recompute on resize)
+- Ground line at 94% of stage height. Draw a thick ground strip (flat colour) from there
+  to the bottom of the stage with a 3px ink line on its top edge.
+- Wall front-face height Hw = min(0.56 x sh, 0.48 x sw). The wall SVG scale is Hw / 560.
+  The wall's right edge sits 6% of sw from the stage's right edge.
+- Above the wall: a post and sign (section 4). The post height is whatever space remains
+  between the top of the cap and 4% from the top of the stage, minus the plate height
+  (minimum 0.08 x sh). So wall + post + sign fill the stage with no big empty space.
+- Bull: measure the sprite's OPAQUE bounding box once on load (draw bull-charge.png to an
+  offscreen canvas, find pixels with alpha > 20; fall back to the full image if it
+  fails). Size the bull so the opaque height = 0.55 x Hw and the opaque width is at most
+  40% of sw. Align the lowest opaque pixel (soles) to the ground line. The rightmost
+  opaque point (nose and fist) is the CONTACT POINT.
+- REST position: the contact point is 14% of sw to the left of the wall's outer left edge.
+  If the bull then would not fit on screen (including the 6% wind-up), shrink the bull
+  until it does. The bull never overlaps the wall at rest.
+
+3. THE WALL (one inline SVG, viewBox 0 0 600 700, preserveAspectRatio xMidYMax meet)
+Oblique 3D view from slightly left and above. Use these exact polygons (viewBox units;
+the ground is y = 660):
+- FRONT FACE: rectangle x 130 to 560, y 100 to 660.
+- LEFT SIDE FACE (the face the bull hits, a parallelogram): (130,100) (130,660) (40,628)
+  (40,68).
+- TOP CAP (stone coping, a parallelogram slightly wider than the wall): (122,100)
+  (568,100) (478,68) (32,68). Give its front edge a 14-unit thick lighter stone band.
+- GROUND SHADOW: a flat dark parallelogram on the ground to the right of the wall, 20%
+  opacity.
+Colours (flat, no gradients): front bricks #B5472B, #A23D25, #BF5233 (random per brick);
+side face bricks #7A2C19 and #6A2616; mortar and all outlines #2A1510 at 3px; top cap
+#CFC5AE.
+Brick layout (staggered running bond, like a real wall):
+- Front face: 11 rows. Even rows = 4 full bricks. Odd rows = half brick, 3 full bricks,
+  half brick. Each brick is its own piece with a 3px outline and 2px random size jitter.
+  Bricks are about twice as wide as tall.
+- Side face: 11 rows drawn as ONE slab piece with brick lines, EXCEPT the 2 rows the
+  CONTACT POINT's height falls in, which are separate pieces.
+- Total animated pieces must not exceed BRICK_CAP.
+Cracks: an SVG layer on top with 3 levels of dark ink crack paths (stroke 3 to 4px,
+round caps). All start at the impact point on the side face (at the contact height, near
+x = 40) and branch across the side face and into the front face. Level 1: 3 short lines.
+Level 2: adds longer branches reaching the middle of the front face. Level 3: adds
+branches reaching the top and the far edge. Reveal each level with stroke-dashoffset
+over 250ms.
+
+4. THE WALL ST. SIGN (replaces the old sign; no emoji, no icon)
+- A short steel post (flat grey #8E8B84, 3px ink outline) rises from the top cap at about
+  x = 345, y = 84 in wall units.
+- On top of the post: a blade-style street sign plate, width = 1.25 x the wall's front
+  face width, height = 0.34 x its width, ink black #0E0D0C with a thin cream inner border
+  line. Text WALL ST. in Anton, cream #E8DFC9, letter-spacing 0.06em, auto-sized to fit.
+  Keep the red offset shadow (#C23B22) behind it. Two small bolts at the ends.
+- It is ALWAYS fully visible: never covered by the bull, the effects or the headline.
+- Set an explicit transform-origin for every rotation (the post base for sway, the
+  remaining bolt for swinging).
+- Reactions: ram 1: the post sways +-4 degrees and the plate jolts. Ram 2: the post
+  leans -8 degrees, the left bolt pops off and falls, the plate hangs slightly crooked.
+  Ram 3: the post bends -18 degrees, the plate hangs from one bolt and swings (damped
+  pendulum). BREACH: the sign falls with the bricks, hits the ground, bounces twice and
+  stays lying on the ground against the rubble at about -15 degrees, fully visible. In the
+  closing scene keep it lying at the bottom right of the stage if there is room; otherwise
+  fade it with the rubble.
+
+5. THE BULL
+- Layer order from back to front: background, ground, wall shadow, wall, cracks, sign,
+  bull shadow, bull, effects (starburst, dust, speed lines), loose debris. The bull is in
+  front of the wall's side face but behind the sign.
+- Idle: a breathing bob (translateY 3px, 1.2s loop) and a small foot-stomp rotation (-1 to
+  1 degree). While the button is held between rams, use a faster bob and a small paw-scrape
+  wiggle. Under him: a flat dark ellipse shadow that shrinks when he is in the air.
+- Intro entry (as the newspapers leave): he slides in from the left edge to REST (400ms,
+  ease-out). The wall rises from the ground over the same time (translateY 100% to 0, with
+  6 to 8 small dust squares).
+
+6. THE RAM (repeat for damage levels 1, 2, 3). Timeline:
+a) Wind-up 350ms: the bull moves left by 6% of sw and leans back (rotate -6 degrees about
+   his feet), power2.out.
+b) Dash 220ms: he moves right until his CONTACT POINT reaches the wall's outer left edge at
+   the contact height, power3.in. Draw 3 flat horizontal speed lines behind him (cream,
+   3px, 20 to 40px long).
+c) Impact, 120ms freeze: bull squash (scaleX 0.92, scaleY 1.05 from the feet). A flat 8-point
+   starburst (cream fill, ink outline) pops at the contact spot (scale 0.4 to 1.2 to 1,
+   250ms, then fades). The stage shakes (translate 6px, 8px, 12px for rams 1, 2, 3, under
+   300ms, no flashing, no brightness changes). The wall jolts (translateX +6px and back,
+   easeOutBack). This damage level's cracks reveal. 6 to 10 small dust squares (cream,
+   6 to 12px) fly off the impact point and fall. The sign reacts (section 4). The two struck
+   side bricks slide in 6px (ram 1) and 12px (ram 2); at ram 3 they fall out and leave dark
+   holes. At rams 2 and 3, 3 to 5 loose front bricks near the top drop 20 to 60px and settle
+   on the ground.
+d) Rebound 450ms: the bull bounces back to REST with a small hop arc (translateY -14px up
+   and down), rotates -5 degrees and back, and wobbles +-2 degrees for 400ms (dazed). Lands
+   with a tiny squash.
+Total about 1.3s. Nothing else starts until it finishes.
+SOUND: use the existing sound hooks only (a thud on each impact, a bigger one on the
+breach). Everything stays silent unless sound is on.
+
+7. BREACH (target reaches 1.0)
+- A final dash like ram 3, but he does not bounce back: he goes THROUGH. All wall pieces
+  (front bricks, struck bricks, side slab, cap, post) fly: each gets a random velocity
+  (mostly to the right: x 80 to 340px, up 40 to 260px) and rotation +-240 degrees, falls
+  under gravity, bounces once and rests as rubble inside the stage. Stage shake 14px for
+  350ms, no flashes.
+- The bull ends standing on the right side for 500ms. Then the existing closing scene takes
+  over: the background goes from newsprint to ink black with bronze accents, bull-standing
+  rises in with the closing text (keep the existing implementation and strings). The
+  rubble fades out over 1.2s meanwhile.
+- Then show the RUN IT BACK stamp button (existing).
+
+8. RUN IT BACK
+The pieces fly back and rebuild the wall in 800ms, cracks clear, the sign returns to its
+post, the background returns to newsprint, target and shown reset to 0, the bull returns to
+REST. Mobile: ready to hold again. Desktop: smooth-scroll to the start of the pinned
+section.
+
+9. REDUCED MOTION
+No pin, no shake, no flying pieces. Show 4 static panels (newspapers, intact wall with
+sign, cracked wall, breached wall) built from the same SVG states, with the existing
+captions.
+
+10. PERFORMANCE
+Only transform and opacity. will-change: transform only on the bull, wall group and sign,
+removed after the breach. No filters, no blur, no animated box-shadow, no gradients. At
+most 60 animated pieces. Test with the CPU throttled 4x and keep it smooth.
+
+ACCEPTANCE: confirm each point in your reply:
+- At rest, the bull and the wall are fully inside the stage at 390x700, 402x874, 768x1024
+  and 1440x900, with no overlap.
+- The wall clearly shows a front face, a side face, a top cap and brick courses (not
+  squares).
+- Three separate rams happen at about 62%, 78% and 90% of the hold. Between them the bull
+  is back at rest.
+- The cracks grow with each ram and stay if the visitor releases the button.
+- The WALL ST. sign is always visible and reacts to each ram.
+- At 100% the wall bursts and the closing scene plays, then RUN IT BACK restores
+  everything.
+- Nothing ever overlaps the HOLD button or the progress bar.
