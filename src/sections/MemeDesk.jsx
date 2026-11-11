@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Download, Share2, Copy, Twitter, Sparkles, Check, Move } from 'lucide-react';
 import { MEME_DESK_COPY } from '../copy.js';
+import { Reveal } from '../components/Reveal';
 
 // Preload and cache HTMLImageElement
 const imageCache = new Map();
@@ -587,22 +588,31 @@ export const MemeDesk = () => {
 
   return (
     <section
+      id="meme-desk"
       aria-label="The Meme Desk"
-      className="relative w-full bg-black text-[#E8DFC9] py-12 sm:py-20 px-3 sm:px-6 border-t-2 border-[#C97B1A]/40 select-none pb-32 sm:pb-36"
+      className="relative w-full bg-black text-[#E8DFC9] px-3 sm:px-6 border-t-2 border-[#C97B1A]/40 select-none pb-32 sm:pb-36 scroll-mt-12"
+      style={{
+        paddingTop: 'clamp(24px, 6dvh, 64px)',
+        scrollMarginTop: 'clamp(32px, 5vh, 64px)',
+      }}
     >
       <div className="max-w-6xl mx-auto flex flex-col">
         {/* Section Header */}
         <div className="border-b-2 border-[#C97B1A] pb-4 mb-6 sm:mb-8 text-center sm:text-left">
-          <h2 className="font-anton text-3xl sm:text-5xl text-white uppercase tracking-wide">
-            {MEME_DESK_COPY.heading}
-          </h2>
+          <Reveal variant="stamp">
+            <h2 className="font-anton text-3xl sm:text-5xl text-white uppercase tracking-wide inline-block">
+              {MEME_DESK_COPY.heading}
+            </h2>
+          </Reveal>
           <p className="font-plex text-xs sm:text-sm text-[#F2B24A] font-bold tracking-widest uppercase mt-1">
             {MEME_DESK_COPY.subheading}
           </p>
         </div>
 
-        {/* Live Accessibility Status Banner */}
-        {statusMsg && (
+        {/* Blocks under heading animated with variant="rise" */}
+        <Reveal variant="rise" stagger={80} className="w-full flex flex-col">
+          {/* Live Accessibility Status Banner */}
+          {statusMsg && (
           <div
             role="status"
             aria-live="polite"
@@ -1109,6 +1119,7 @@ export const MemeDesk = () => {
 
           </div>
         </div>
+      </Reveal>
 
       </div>
     </section>

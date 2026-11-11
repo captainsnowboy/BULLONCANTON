@@ -4,6 +4,7 @@ import rawArrivalsData from '../data/arrivals.json';
 import { ARRIVALS_COPY } from '../copy.js';
 import { X_URL } from '../config.js';
 import { playFlipClickSound } from '../utils/audio';
+import { Reveal } from '../components/Reveal';
 
 const CHAR_SET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/. ';
 
@@ -366,7 +367,12 @@ export const Arrivals = () => {
   return (
     <section
       ref={sectionRef}
-      className="relative w-full bg-black text-[#E8DFC9] py-16 sm:py-24 px-3 sm:px-6 border-t-2 border-[#C97B1A]/40 select-none pb-24"
+      id="arrivals"
+      className="relative w-full bg-black text-[#E8DFC9] px-3 sm:px-6 border-t-2 border-[#C97B1A]/40 select-none pb-24 scroll-mt-12"
+      style={{
+        paddingTop: 'clamp(24px, 6dvh, 64px)',
+        scrollMarginTop: 'clamp(32px, 5vh, 64px)',
+      }}
     >
       <div className="max-w-6xl mx-auto flex flex-col">
         {/* ============================================================= */}
@@ -380,9 +386,11 @@ export const Arrivals = () => {
                 ONCHAIN DIRECTORY
               </span>
             </div>
-            <h2 className="font-anton text-3xl sm:text-5xl tracking-wide text-white uppercase">
-              {ARRIVALS_COPY.title}
-            </h2>
+            <Reveal variant="stamp">
+              <h2 className="font-anton text-3xl sm:text-5xl tracking-wide text-white uppercase inline-block">
+                {ARRIVALS_COPY.title}
+              </h2>
+            </Reveal>
             <p className="font-plex text-xs sm:text-sm text-[#E8DFC9]/70 mt-1">
               {ARRIVALS_COPY.subtitle}
             </p>
@@ -397,10 +405,12 @@ export const Arrivals = () => {
           </div>
         </div>
 
-        {/* ============================================================= */}
-        {/* "NOW BOARDING" AIRPORT ANNOUNCEMENT LINE                      */}
-        {/* ============================================================= */}
-        {currentBoardingRow && (
+        {/* Blocks under heading animated with variant="rise" */}
+        <Reveal variant="rise" stagger={80} className="w-full flex flex-col">
+          {/* ============================================================= */}
+          {/* "NOW BOARDING" AIRPORT ANNOUNCEMENT LINE                      */}
+          {/* ============================================================= */}
+          {currentBoardingRow && (
           <div className="mb-5">
             <button
               type="button"
@@ -588,6 +598,7 @@ export const Arrivals = () => {
             />
           </div>
         </div>
+      </Reveal>
 
         {/* ============================================================= */}
         {/* MOBILE BOTTOM SHEET (< 900px)                                 */}

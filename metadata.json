@@ -1,6 +1,6 @@
 {
   "name": "BULL ON CANTON",
-  "description": "THE WALLSTREET IS ONCHAIN",
+  "description": "BULL ON CANTON is an independent community meme about Wall Street moving onchain.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

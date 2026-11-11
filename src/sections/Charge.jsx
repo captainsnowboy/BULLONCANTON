@@ -135,6 +135,22 @@ export const Charge = () => {
   const [headlineOpacity, setHeadlineOpacity] = useState(1);
   const [peekReady, setPeekReady] = useState(false);
 
+  // Debug panel state: strictly enabled ONLY when URL contains ?debug=charge
+  const [isDebug, setIsDebug] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.location.search.includes('debug=charge');
+  });
+  const [showOutlines, setShowOutlines] = useState(false);
+  const [isSlowMo, setIsSlowMo] = useState(false);
+
+  useEffect(() => {
+    const handleUrlChange = () => {
+      setIsDebug(window.location.search.includes('debug=charge'));
+    };
+    window.addEventListener('popstate', handleUrlChange);
+    return () => window.removeEventListener('popstate', handleUrlChange);
+  }, []);
+
   // -----------------------------------------------------------------------
   // 1. ENGINE REFS (NO React re-renders per frame)
   // -----------------------------------------------------------------------
@@ -992,6 +1008,341 @@ export const Charge = () => {
   }, []);
 
   // -----------------------------------------------------------------------
+  // DEBUG HELPERS & RESET
+  // -----------------------------------------------------------------------
+  const instantReset = useCallback(() => {
+    gsap.killTweensOf([
+      bullSpriteRef.current,
+      wallSvgRef.current,
+      signPlateGroupRef.current,
+      postGroupRef.current,
+      standingBullRef.current,
+      containerRef.current,
+    ]);
+    cracksRef.current.forEach((c) => {
+      if (c) {
+        gsap.killTweensOf(c);
+        gsap.set(c, { strokeDashoffset: 800, opacity: 0 });
+      }
+    });
+    ALL_FRONT_BRICKS.forEach((_, idx) => {
+      const el = frontBrickRefs.current[idx];
+      if (el) {
+        gsap.killTweensOf(el);
+        gsap.set(el, { x: 0, y: 0, rotation: 0, opacity: 1 });
+      }
+    });
+    if (sideSlabRef.current) gsap.set(sideSlabRef.current, { x: 0, y: 0, rotation: 0, opacity: 1 });
+    if (struckBrick1Ref.current) gsap.set(struckBrick1Ref.current, { x: 0, y: 0, rotation: 0, opacity: 1 });
+    if (struckBrick2Ref.current) gsap.set(struckBrick2Ref.current, { x: 0, y: 0, rotation: 0, opacity: 1 });
+    if (topCapRef.current) gsap.set(topCapRef.current, { x: 0, y: 0, rotation: 0, opacity: 1 });
+    if (signPlateGroupRef.current) gsap.set(signPlateGroupRef.current, { x: 0, y: 0, rotation: 0 });
+    if (postGroupRef.current) gsap.set(postGroupRef.current, { rotation: 0 });
+    if (leftBoltRef.current) gsap.set(leftBoltRef.current, { x: 0, y: 0, rotation: 0, opacity: 1 });
+    if (bullSpriteRef.current) gsap.set(bullSpriteRef.current, { x: 0, y: 0, rotation: 0, opacity: 1, scaleX: 1, scaleY: 1 });
+    if (standingBullRef.current) gsap.set(standingBullRef.current, { y: 120, opacity: 0 });
+    if (containerRef.current) gsap.set(containerRef.current, { backgroundColor: '#E8DFC9' });
+
+    isBrokenRef.current = false;
+    setIsBroken(false);
+    targetRef.current = 0;
+    shownRef.current = 0;
+    damageLevelRef.current = 0;
+    lastThresholdReachedRef.current = 0;
+    isAnimatingRamRef.current = false;
+    isHoldingRef.current = false;
+    hasTriggeredWallDustRef.current = false;
+    setPeekReady(true);
+
+    if (progressBarFillRef.current) progressBarFillRef.current.style.width = '0%';
+    if (buttonTextRef.current) buttonTextRef.current.textContent = `⚡ ${CHARGE_COPY.mobileButton.holdText}`;
+    if (cardsContainerRef.current) {
+      cardsContainerRef.current.style.display = 'block';
+      cardsContainerRef.current.style.transform = 'translateY(0px)';
+      cardsContainerRef.current.style.opacity = '1';
+    }
+    if (wallGroupRef.current) {
+      wallGroupRef.current.style.transform = 'translateY(105%)';
+      wallGroupRef.current.style.opacity = '0';
+    }
+    if (signContainerRef.current) {
+      signContainerRef.current.style.transform = 'translateY(105%)';
+      signContainerRef.current.style.opacity = '0';
+    }
+    if (bullContainerRef.current) {
+      bullContainerRef.current.style.transform = 'translateX(-340px)';
+      bullContainerRef.current.style.opacity = '0';
+    }
+    setDisplayedHeadline(CHARGE_COPY.beat1.heading);
+    headlineTargetRef.current = CHARGE_COPY.beat1.heading;
+  }, []);
+
+  const getStateName = useCallback(() => {
+    if (isBrokenRef.current && !isAnimatingRamRef.current) return 'closing';
+    if (isAnimatingRamRef.current) {
+      if (shownRef.current >= 0.98 || targetRef.current >= 1.0) return 'breach';
+      if (damageLevelRef.current === 3) return 'ram3';
+      if (damageLevelRef.current === 2) return 'ram2';
+      return 'ram1';
+    }
+    if (shownRef.current < 0.35) return 'intro';
+    if (shownRef.current >= 0.98) return 'closing';
+    return 'idle';
+  }, []);
+
+  const handleDebugJump = useCallback((stateKey) => {
+    if (stateKey === 'intro') {
+      instantReset();
+    } else if (stateKey === 'ram1') {
+      gsap.killTweensOf([
+        bullSpriteRef.current,
+        wallSvgRef.current,
+        signPlateGroupRef.current,
+        postGroupRef.current,
+        standingBullRef.current,
+        containerRef.current,
+      ]);
+      isBrokenRef.current = false;
+      setIsBroken(false);
+      if (containerRef.current) gsap.set(containerRef.current, { backgroundColor: '#E8DFC9' });
+      if (standingBullRef.current) gsap.set(standingBullRef.current, { y: 120, opacity: 0 });
+
+      cracksRef.current.forEach((c) => c && gsap.set(c, { strokeDashoffset: 800, opacity: 0 }));
+      ALL_FRONT_BRICKS.forEach((_, idx) => {
+        const el = frontBrickRefs.current[idx];
+        if (el) gsap.set(el, { x: 0, y: 0, rotation: 0, opacity: 1 });
+      });
+      if (sideSlabRef.current) gsap.set(sideSlabRef.current, { x: 0, y: 0, rotation: 0, opacity: 1 });
+      if (struckBrick1Ref.current) gsap.set(struckBrick1Ref.current, { x: 0, y: 0, rotation: 0, opacity: 1 });
+      if (struckBrick2Ref.current) gsap.set(struckBrick2Ref.current, { x: 0, y: 0, rotation: 0, opacity: 1 });
+      if (topCapRef.current) gsap.set(topCapRef.current, { x: 0, y: 0, rotation: 0, opacity: 1 });
+      if (signPlateGroupRef.current) gsap.set(signPlateGroupRef.current, { x: 0, y: 0, rotation: 0 });
+      if (postGroupRef.current) gsap.set(postGroupRef.current, { rotation: 0 });
+      if (leftBoltRef.current) gsap.set(leftBoltRef.current, { x: 0, y: 0, rotation: 0, opacity: 1 });
+
+      if (cardsContainerRef.current) cardsContainerRef.current.style.display = 'none';
+      if (wallGroupRef.current) {
+        wallGroupRef.current.style.transform = 'translateY(0%)';
+        wallGroupRef.current.style.opacity = '1';
+      }
+      if (signContainerRef.current) {
+        signContainerRef.current.style.transform = 'translateY(0%)';
+        signContainerRef.current.style.opacity = '1';
+      }
+      if (bullContainerRef.current) {
+        bullContainerRef.current.style.transform = 'translateX(0px)';
+        bullContainerRef.current.style.opacity = '1';
+      }
+      if (bullSpriteRef.current) {
+        gsap.set(bullSpriteRef.current, { x: 0, y: 0, rotation: 0, opacity: 1, scaleX: 1, scaleY: 1 });
+      }
+
+      targetRef.current = 0.62;
+      shownRef.current = 0.62;
+      damageLevelRef.current = 1;
+      lastThresholdReachedRef.current = 0.62;
+      isAnimatingRamRef.current = true;
+      executeRam(0);
+    } else if (stateKey === 'ram2') {
+      gsap.killTweensOf([
+        bullSpriteRef.current,
+        wallSvgRef.current,
+        signPlateGroupRef.current,
+        postGroupRef.current,
+        standingBullRef.current,
+        containerRef.current,
+      ]);
+      isBrokenRef.current = false;
+      setIsBroken(false);
+      if (containerRef.current) gsap.set(containerRef.current, { backgroundColor: '#E8DFC9' });
+      if (standingBullRef.current) gsap.set(standingBullRef.current, { y: 120, opacity: 0 });
+
+      if (cracksRef.current[0]) gsap.set(cracksRef.current[0], { strokeDashoffset: 0, opacity: 1 });
+      if (cracksRef.current[1]) gsap.set(cracksRef.current[1], { strokeDashoffset: 800, opacity: 0 });
+      if (cracksRef.current[2]) gsap.set(cracksRef.current[2], { strokeDashoffset: 800, opacity: 0 });
+
+      ALL_FRONT_BRICKS.forEach((_, idx) => {
+        const el = frontBrickRefs.current[idx];
+        if (el) gsap.set(el, { x: 0, y: 0, rotation: 0, opacity: 1 });
+      });
+      if (sideSlabRef.current) gsap.set(sideSlabRef.current, { x: 0, y: 0, rotation: 0, opacity: 1 });
+      if (struckBrick1Ref.current) gsap.set(struckBrick1Ref.current, { x: 6, y: 0, rotation: 0, opacity: 1 });
+      if (struckBrick2Ref.current) gsap.set(struckBrick2Ref.current, { x: 6, y: 0, rotation: 0, opacity: 1 });
+      if (topCapRef.current) gsap.set(topCapRef.current, { x: 0, y: 0, rotation: 0, opacity: 1 });
+      if (signPlateGroupRef.current) gsap.set(signPlateGroupRef.current, { x: 0, y: 0, rotation: 0 });
+      if (postGroupRef.current) gsap.set(postGroupRef.current, { rotation: 0 });
+      if (leftBoltRef.current) gsap.set(leftBoltRef.current, { x: 0, y: 0, rotation: 0, opacity: 1 });
+
+      if (cardsContainerRef.current) cardsContainerRef.current.style.display = 'none';
+      if (wallGroupRef.current) {
+        wallGroupRef.current.style.transform = 'translateY(0%)';
+        wallGroupRef.current.style.opacity = '1';
+      }
+      if (signContainerRef.current) {
+        signContainerRef.current.style.transform = 'translateY(0%)';
+        signContainerRef.current.style.opacity = '1';
+      }
+      if (bullContainerRef.current) {
+        bullContainerRef.current.style.transform = 'translateX(0px)';
+        bullContainerRef.current.style.opacity = '1';
+      }
+      if (bullSpriteRef.current) {
+        gsap.set(bullSpriteRef.current, { x: 0, y: 0, rotation: 0, opacity: 1, scaleX: 1, scaleY: 1 });
+      }
+
+      targetRef.current = 0.78;
+      shownRef.current = 0.78;
+      damageLevelRef.current = 2;
+      lastThresholdReachedRef.current = 0.78;
+      isAnimatingRamRef.current = true;
+      executeRam(1);
+    } else if (stateKey === 'ram3') {
+      gsap.killTweensOf([
+        bullSpriteRef.current,
+        wallSvgRef.current,
+        signPlateGroupRef.current,
+        postGroupRef.current,
+        standingBullRef.current,
+        containerRef.current,
+      ]);
+      isBrokenRef.current = false;
+      setIsBroken(false);
+      if (containerRef.current) gsap.set(containerRef.current, { backgroundColor: '#E8DFC9' });
+      if (standingBullRef.current) gsap.set(standingBullRef.current, { y: 120, opacity: 0 });
+
+      if (cracksRef.current[0]) gsap.set(cracksRef.current[0], { strokeDashoffset: 0, opacity: 1 });
+      if (cracksRef.current[1]) gsap.set(cracksRef.current[1], { strokeDashoffset: 0, opacity: 1 });
+      if (cracksRef.current[2]) gsap.set(cracksRef.current[2], { strokeDashoffset: 800, opacity: 0 });
+
+      ALL_FRONT_BRICKS.forEach((_, idx) => {
+        const el = frontBrickRefs.current[idx];
+        if (el) gsap.set(el, { x: 0, y: 0, rotation: 0, opacity: 1 });
+      });
+      if (frontBrickRefs.current[1]) gsap.set(frontBrickRefs.current[1], { y: 35, rotation: 8 });
+      if (frontBrickRefs.current[2]) gsap.set(frontBrickRefs.current[2], { y: 48, rotation: -6 });
+      if (frontBrickRefs.current[7]) gsap.set(frontBrickRefs.current[7], { y: 30, rotation: 10 });
+
+      if (sideSlabRef.current) gsap.set(sideSlabRef.current, { x: 0, y: 0, rotation: 0, opacity: 1 });
+      if (struckBrick1Ref.current) gsap.set(struckBrick1Ref.current, { x: 12, y: 0, rotation: 0, opacity: 1 });
+      if (struckBrick2Ref.current) gsap.set(struckBrick2Ref.current, { x: 12, y: 0, rotation: 0, opacity: 1 });
+      if (topCapRef.current) gsap.set(topCapRef.current, { x: 0, y: 0, rotation: 0, opacity: 1 });
+      if (postGroupRef.current) gsap.set(postGroupRef.current, { rotation: -8, transformOrigin: '345px 84px' });
+      if (signPlateGroupRef.current) gsap.set(signPlateGroupRef.current, { rotation: -6 });
+      if (leftBoltRef.current) gsap.set(leftBoltRef.current, { opacity: 0 });
+
+      if (cardsContainerRef.current) cardsContainerRef.current.style.display = 'none';
+      if (wallGroupRef.current) {
+        wallGroupRef.current.style.transform = 'translateY(0%)';
+        wallGroupRef.current.style.opacity = '1';
+      }
+      if (signContainerRef.current) {
+        signContainerRef.current.style.transform = 'translateY(0%)';
+        signContainerRef.current.style.opacity = '1';
+      }
+      if (bullContainerRef.current) {
+        bullContainerRef.current.style.transform = 'translateX(0px)';
+        bullContainerRef.current.style.opacity = '1';
+      }
+      if (bullSpriteRef.current) {
+        gsap.set(bullSpriteRef.current, { x: 0, y: 0, rotation: 0, opacity: 1, scaleX: 1, scaleY: 1 });
+      }
+
+      targetRef.current = 0.90;
+      shownRef.current = 0.90;
+      damageLevelRef.current = 3;
+      lastThresholdReachedRef.current = 0.90;
+      isAnimatingRamRef.current = true;
+      executeRam(2);
+    } else if (stateKey === 'breach') {
+      gsap.killTweensOf([
+        bullSpriteRef.current,
+        wallSvgRef.current,
+        signPlateGroupRef.current,
+        postGroupRef.current,
+        standingBullRef.current,
+        containerRef.current,
+      ]);
+      isBrokenRef.current = false;
+      setIsBroken(false);
+      if (containerRef.current) gsap.set(containerRef.current, { backgroundColor: '#E8DFC9' });
+      if (standingBullRef.current) gsap.set(standingBullRef.current, { y: 120, opacity: 0 });
+
+      cracksRef.current.forEach((c) => c && gsap.set(c, { strokeDashoffset: 0, opacity: 1 }));
+      ALL_FRONT_BRICKS.forEach((_, idx) => {
+        const el = frontBrickRefs.current[idx];
+        if (el) gsap.set(el, { x: 0, y: 0, rotation: 0, opacity: 1 });
+      });
+      if (sideSlabRef.current) gsap.set(sideSlabRef.current, { x: 0, y: 0, rotation: 0, opacity: 1 });
+      if (struckBrick1Ref.current) gsap.set(struckBrick1Ref.current, { x: 12, y: 0, rotation: 0, opacity: 1 });
+      if (struckBrick2Ref.current) gsap.set(struckBrick2Ref.current, { x: 12, y: 0, rotation: 0, opacity: 1 });
+      if (topCapRef.current) gsap.set(topCapRef.current, { x: 0, y: 0, rotation: 0, opacity: 1 });
+      if (signPlateGroupRef.current) gsap.set(signPlateGroupRef.current, { x: 0, y: 0, rotation: 0 });
+      if (postGroupRef.current) gsap.set(postGroupRef.current, { rotation: 0 });
+      if (leftBoltRef.current) gsap.set(leftBoltRef.current, { opacity: 0 });
+
+      if (cardsContainerRef.current) cardsContainerRef.current.style.display = 'none';
+      if (wallGroupRef.current) {
+        wallGroupRef.current.style.transform = 'translateY(0%)';
+        wallGroupRef.current.style.opacity = '1';
+      }
+      if (signContainerRef.current) {
+        signContainerRef.current.style.transform = 'translateY(0%)';
+        signContainerRef.current.style.opacity = '1';
+      }
+      if (bullContainerRef.current) {
+        bullContainerRef.current.style.transform = 'translateX(0px)';
+        bullContainerRef.current.style.opacity = '1';
+      }
+      if (bullSpriteRef.current) {
+        gsap.set(bullSpriteRef.current, { x: 0, y: 0, rotation: 0, opacity: 1, scaleX: 1, scaleY: 1 });
+      }
+
+      targetRef.current = 1.0;
+      shownRef.current = 1.0;
+      damageLevelRef.current = 3;
+      lastThresholdReachedRef.current = 1.0;
+      executeBreach();
+    } else if (stateKey === 'run_it_back') {
+      handleRunItBack();
+    } else if (stateKey === 'reset') {
+      instantReset();
+    }
+  }, [executeRam, executeBreach, handleRunItBack, instantReset]);
+
+  const handleDebugSlider = useCallback((val) => {
+    if (isBrokenRef.current && val < 1.0) {
+      isBrokenRef.current = false;
+      setIsBroken(false);
+      if (containerRef.current) gsap.set(containerRef.current, { backgroundColor: '#E8DFC9' });
+      if (standingBullRef.current) gsap.set(standingBullRef.current, { y: 120, opacity: 0 });
+      ALL_FRONT_BRICKS.forEach((_, idx) => {
+        const el = frontBrickRefs.current[idx];
+        if (el) gsap.set(el, { x: 0, y: 0, rotation: 0, opacity: 1 });
+      });
+      if (bullSpriteRef.current) gsap.set(bullSpriteRef.current, { x: 0, y: 0, rotation: 0, opacity: 1, scaleX: 1, scaleY: 1 });
+    }
+    targetRef.current = val;
+  }, []);
+
+  const toggleSlowMo = useCallback(() => {
+    setIsSlowMo((prev) => {
+      const next = !prev;
+      gsap.globalTimeline.timeScale(next ? 0.25 : 1);
+      return next;
+    });
+  }, []);
+
+  const toggleOutlines = useCallback(() => {
+    setShowOutlines((prev) => !prev);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      gsap.globalTimeline.timeScale(1);
+    };
+  }, []);
+
+  // -----------------------------------------------------------------------
   // 1. ENGINE ANIMATION FRAME LOOP (Decoupled Target vs Shown, Zero React State)
   // -----------------------------------------------------------------------
   useEffect(() => {
@@ -1305,6 +1656,8 @@ export const Charge = () => {
           width: '100%',
           maxWidth: '900px',
           marginInline: 'auto',
+          outline: isDebug && showOutlines ? '2px dashed #F2B24A' : undefined,
+          outlineOffset: isDebug && showOutlines ? '-2px' : undefined,
         }}
       >
         {/* Screen Shake / Rumble Container */}
@@ -1540,6 +1893,21 @@ export const Charge = () => {
                 ))}
               </g>
 
+              {/* Debug outline around wall's front face */}
+              {isDebug && showOutlines && (
+                <rect
+                  x="130"
+                  y="100"
+                  width="430"
+                  height="560"
+                  fill="none"
+                  stroke="#2FD27A"
+                  strokeWidth="2"
+                  vectorEffect="non-scaling-stroke"
+                  className="pointer-events-none"
+                />
+              )}
+
               {/* 3 Levels of Dark Ink Cracks */}
               <g className="wall-crack-layers pointer-events-none">
                 {/* Level 1: 3 short lines */}
@@ -1627,6 +1995,31 @@ export const Charge = () => {
                 height={1200}
                 className="w-full h-full object-contain"
               />
+
+              {/* Debug outlines: bull opaque bounding box and contact point dot */}
+              {isDebug && showOutlines && (
+                <>
+                  <div
+                    className="absolute pointer-events-none"
+                    style={{
+                      left: `${(opaqueBoundsRef.current.minX / opaqueBoundsRef.current.w) * 100}%`,
+                      top: `${(opaqueBoundsRef.current.minY / opaqueBoundsRef.current.h) * 100}%`,
+                      width: `${(opaqueBoundsRef.current.opaqueW / opaqueBoundsRef.current.w) * 100}%`,
+                      height: `${(opaqueBoundsRef.current.opaqueH / opaqueBoundsRef.current.h) * 100}%`,
+                      outline: '2px solid #C23B22',
+                      outlineOffset: '-1px',
+                      zIndex: 45,
+                    }}
+                  />
+                  <div
+                    className="absolute pointer-events-none w-2.5 h-2.5 rounded-full bg-[#C23B22] border-2 border-[#FFFDF7] -translate-x-1/2 -translate-y-1/2 z-50 shadow-[0_0_4px_#000]"
+                    style={{
+                      left: `${(opaqueBoundsRef.current.maxX / opaqueBoundsRef.current.w) * 100}%`,
+                      top: `${(opaqueBoundsRef.current.minY / opaqueBoundsRef.current.h + (opaqueBoundsRef.current.opaqueH / opaqueBoundsRef.current.h) * opaqueBoundsRef.current.contactYRel) * 100}%`,
+                    }}
+                  />
+                </>
+              )}
             </div>
 
             {/* 8-Point Starburst on impact */}
@@ -1718,6 +2111,22 @@ export const Charge = () => {
                     stroke="#E8DFC9"
                     strokeWidth="2"
                   />
+
+                  {/* Debug outline around sign plate */}
+                  {isDebug && showOutlines && (
+                    <rect
+                      x={345 - 537.5 / 2}
+                      y={84 - stageSizes.postHeightViewBox - 182.75}
+                      width="537.5"
+                      height="182.75"
+                      rx="4"
+                      fill="none"
+                      stroke="#C97B1A"
+                      strokeWidth="2"
+                      vectorEffect="non-scaling-stroke"
+                      className="pointer-events-none"
+                    />
+                  )}
 
                   {/* Text: WALL ST. in Anton, cream #E8DFC9 */}
                   <text
@@ -1933,6 +2342,215 @@ export const Charge = () => {
           </button>
         )}
       </div>
+
+      {/* DEBUG PANEL: mounts strictly when ?debug=charge is present in URL */}
+      {isDebug && (
+        <ChargeDebugPanel
+          targetRef={targetRef}
+          shownRef={shownRef}
+          damageLevelRef={damageLevelRef}
+          getStateName={getStateName}
+          onJump={handleDebugJump}
+          onSliderChange={handleDebugSlider}
+          isSlowMo={isSlowMo}
+          toggleSlowMo={toggleSlowMo}
+          showOutlines={showOutlines}
+          toggleOutlines={toggleOutlines}
+        />
+      )}
     </section>
+  );
+};
+
+// =========================================================================
+// CHARGE DEBUG PANEL COMPONENT
+// =========================================================================
+const ChargeDebugPanel = ({
+  targetRef,
+  shownRef,
+  damageLevelRef,
+  getStateName,
+  onJump,
+  onSliderChange,
+  isSlowMo,
+  toggleSlowMo,
+  showOutlines,
+  toggleOutlines,
+}) => {
+  const [isHidden, setIsHidden] = useState(false);
+  const [stats, setStats] = useState({
+    target: 0,
+    shown: 0,
+    damageLevel: 0,
+    state: 'intro',
+  });
+
+  useEffect(() => {
+    const update = () => {
+      setStats({
+        target: targetRef.current,
+        shown: shownRef.current,
+        damageLevel: damageLevelRef.current,
+        state: getStateName(),
+      });
+    };
+    update();
+    const interval = setInterval(update, 50);
+    return () => clearInterval(interval);
+  }, [targetRef, shownRef, damageLevelRef, getStateName]);
+
+  if (isHidden) {
+    return (
+      <button
+        type="button"
+        onClick={() => setIsHidden(false)}
+        aria-label="Show Charge Debug Panel"
+        className="fixed top-2 left-2 z-[99999] px-2.5 py-1 bg-[#0E0D0C]/95 text-[#E8DFC9] border border-[#C97B1A] font-mono text-[10px] uppercase font-bold shadow-[2px_2px_0_#000] cursor-pointer hover:bg-[#C97B1A] hover:text-black transition-colors"
+      >
+        ⚙ Debug
+      </button>
+    );
+  }
+
+  return (
+    <div
+      className="fixed top-2 left-2 z-[99999] w-64 max-w-[calc(100vw-16px)] bg-[#0E0D0C]/95 text-[#E8DFC9] border-2 border-[#C97B1A] font-mono text-xs p-3 shadow-[4px_4px_0_#000] backdrop-blur-sm select-none"
+      style={{ maxHeight: 'calc(100dvh - 16px)', overflowY: 'auto' }}
+    >
+      {/* Header with Hide button */}
+      <div className="flex items-center justify-between border-b border-[#C97B1A]/40 pb-1.5 mb-2.5">
+        <div className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-[#2FD27A] animate-pulse" />
+          <span className="font-bold text-[#F2B24A] text-[11px] tracking-wider uppercase">
+            Charge Debug
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsHidden(true)}
+          className="text-[10px] bg-[#2A1510] text-[#E8DFC9] px-2 py-0.5 border border-[#C97B1A]/60 hover:bg-[#C97B1A] hover:text-black cursor-pointer uppercase transition-colors"
+        >
+          Hide
+        </button>
+      </div>
+
+      {/* Live Values */}
+      <div className="bg-[#151311] border border-[#2A1510] p-2 mb-2.5">
+        <div className="text-[10px] text-[#C97B1A] uppercase font-bold tracking-wider mb-1 border-b border-[#2A1510] pb-0.5">
+          Live Values
+        </div>
+        <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px]">
+          <span className="text-[#8E8B84]">target:</span>
+          <span className="text-[#E8DFC9] font-bold text-right">{stats.target.toFixed(3)}</span>
+          <span className="text-[#8E8B84]">shown:</span>
+          <span className="text-[#E8DFC9] font-bold text-right">{stats.shown.toFixed(3)}</span>
+          <span className="text-[#8E8B84]">damageLevel:</span>
+          <span className="text-[#E8DFC9] font-bold text-right">{stats.damageLevel}</span>
+          <span className="text-[#8E8B84]">state:</span>
+          <span className="text-[#2FD27A] font-bold text-right uppercase">{stats.state}</span>
+        </div>
+      </div>
+
+      {/* Target Slider */}
+      <div className="mb-2.5">
+        <div className="flex justify-between text-[10px] mb-1">
+          <span className="text-[#8E8B84]">Target Slider:</span>
+          <span className="text-[#F2B24A] font-bold">{stats.target.toFixed(2)}</span>
+        </div>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          value={stats.target}
+          onChange={(e) => onSliderChange(parseFloat(e.target.value))}
+          className="w-full accent-[#C97B1A] cursor-pointer"
+        />
+      </div>
+
+      {/* Jump Buttons */}
+      <div className="mb-2.5">
+        <div className="text-[10px] text-[#C97B1A] uppercase font-bold tracking-wider mb-1">
+          Jump States
+        </div>
+        <div className="grid grid-cols-2 gap-1 text-[10px]">
+          <button
+            type="button"
+            onClick={() => onJump('intro')}
+            className="px-2 py-1 bg-[#1A1816] hover:bg-[#C97B1A] hover:text-black text-[#E8DFC9] border border-[#C97B1A]/50 transition-colors cursor-pointer uppercase font-bold text-center"
+          >
+            Intro
+          </button>
+          <button
+            type="button"
+            onClick={() => onJump('ram1')}
+            className="px-2 py-1 bg-[#1A1816] hover:bg-[#C97B1A] hover:text-black text-[#E8DFC9] border border-[#C97B1A]/50 transition-colors cursor-pointer uppercase font-bold text-center"
+          >
+            Ram 1
+          </button>
+          <button
+            type="button"
+            onClick={() => onJump('ram2')}
+            className="px-2 py-1 bg-[#1A1816] hover:bg-[#C97B1A] hover:text-black text-[#E8DFC9] border border-[#C97B1A]/50 transition-colors cursor-pointer uppercase font-bold text-center"
+          >
+            Ram 2
+          </button>
+          <button
+            type="button"
+            onClick={() => onJump('ram3')}
+            className="px-2 py-1 bg-[#1A1816] hover:bg-[#C97B1A] hover:text-black text-[#E8DFC9] border border-[#C97B1A]/50 transition-colors cursor-pointer uppercase font-bold text-center"
+          >
+            Ram 3
+          </button>
+          <button
+            type="button"
+            onClick={() => onJump('breach')}
+            className="px-2 py-1 bg-[#1A1816] hover:bg-[#C97B1A] hover:text-black text-[#E8DFC9] border border-[#C97B1A]/50 transition-colors cursor-pointer uppercase font-bold text-center"
+          >
+            Breach
+          </button>
+          <button
+            type="button"
+            onClick={() => onJump('run_it_back')}
+            className="px-2 py-1 bg-[#1A1816] hover:bg-[#C97B1A] hover:text-black text-[#E8DFC9] border border-[#C97B1A]/50 transition-colors cursor-pointer uppercase font-bold text-center"
+          >
+            Run it back
+          </button>
+          <button
+            type="button"
+            onClick={() => onJump('reset')}
+            className="col-span-2 px-2 py-1 bg-[#2A1510] hover:bg-[#C23B22] text-[#E8DFC9] hover:text-white border border-[#C23B22] transition-colors cursor-pointer uppercase font-bold text-center"
+          >
+            Reset
+          </button>
+        </div>
+      </div>
+
+      {/* Toggles */}
+      <div className="grid grid-cols-2 gap-1 text-[10px] pt-1.5 border-t border-[#C97B1A]/40">
+        <button
+          type="button"
+          onClick={toggleSlowMo}
+          className={`px-2 py-1 border transition-colors cursor-pointer font-bold uppercase text-center ${
+            isSlowMo
+              ? 'bg-[#C97B1A] text-black border-[#F2B24A]'
+              : 'bg-[#1A1816] text-[#E8DFC9] border-[#C97B1A]/50 hover:bg-[#2A2622]'
+          }`}
+        >
+          Slow x0.25: {isSlowMo ? 'ON' : 'OFF'}
+        </button>
+        <button
+          type="button"
+          onClick={toggleOutlines}
+          className={`px-2 py-1 border transition-colors cursor-pointer font-bold uppercase text-center ${
+            showOutlines
+              ? 'bg-[#2FD27A] text-black border-[#2FD27A]'
+              : 'bg-[#1A1816] text-[#E8DFC9] border-[#C97B1A]/50 hover:bg-[#2A2622]'
+          }`}
+        >
+          Outlines: {showOutlines ? 'ON' : 'OFF'}
+        </button>
+      </div>
+    </div>
   );
 };
