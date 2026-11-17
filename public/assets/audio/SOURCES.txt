@@ -1,0 +1,3 @@
+snort-1, snort-2, snort-3, bull-grunt: made from 'freesound_community-horse-snort-95874.mp3' (Freesound community, horse snort).
+bull-grunt is the same recording pitched down.
+TODO: paste the source page link here and confirm its licence allows commercial use before launch.

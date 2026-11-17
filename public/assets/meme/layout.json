@@ -1,0 +1,441 @@
+{
+ "units": "x and widthPct are % of the face image width; y is % of the face image height. pivot is the point of the prop image (0..1) that sits on the snap anchor.",
+ "faceImage": {
+  "width": 1000,
+  "height": 859
+ },
+ "faces": [
+  {
+   "id": "browraise",
+   "label": "Brow raised",
+   "file": "faces/browraise.webp",
+   "anchors": {
+    "eyes": {
+     "x": 51.4,
+     "y": 39.0
+    },
+    "eyeL": {
+     "x": 41.5,
+     "y": 39.0
+    },
+    "eyeR": {
+     "x": 61.3,
+     "y": 39.0
+    },
+    "nose": {
+     "x": 53.7,
+     "y": 54.1
+    },
+    "mouth": {
+     "x": 62,
+     "y": 62
+    },
+    "ear": {
+     "x": 24.2,
+     "y": 39.8
+    },
+    "neck": {
+     "x": 51.5,
+     "y": 66.5
+    },
+    "head": {
+     "x": 51.5,
+     "y": 16.9
+    },
+    "lapel": {
+     "x": 72,
+     "y": 89
+    }
+   }
+  },
+  {
+   "id": "smug",
+   "label": "Smug",
+   "file": "faces/smug.webp",
+   "anchors": {
+    "eyes": {
+     "x": 51.4,
+     "y": 35.5
+    },
+    "eyeL": {
+     "x": 41.5,
+     "y": 35.5
+    },
+    "eyeR": {
+     "x": 61.3,
+     "y": 35.5
+    },
+    "nose": {
+     "x": 54.5,
+     "y": 49.0
+    },
+    "mouth": {
+     "x": 66,
+     "y": 52.5
+    },
+    "ear": {
+     "x": 24.2,
+     "y": 39.8
+    },
+    "neck": {
+     "x": 51.5,
+     "y": 66.5
+    },
+    "head": {
+     "x": 51.5,
+     "y": 18.6
+    },
+    "lapel": {
+     "x": 72,
+     "y": 89
+    }
+   }
+  },
+  {
+   "id": "shocked",
+   "label": "Shocked",
+   "file": "faces/shocked.webp",
+   "anchors": {
+    "eyes": {
+     "x": 51.4,
+     "y": 35.1
+    },
+    "eyeL": {
+     "x": 41.5,
+     "y": 35.1
+    },
+    "eyeR": {
+     "x": 61.3,
+     "y": 35.1
+    },
+    "nose": {
+     "x": 53.7,
+     "y": 48.8
+    },
+    "mouth": {
+     "x": 60,
+     "y": 59
+    },
+    "ear": {
+     "x": 24.2,
+     "y": 39.8
+    },
+    "neck": {
+     "x": 51.5,
+     "y": 66.5
+    },
+    "head": {
+     "x": 51.5,
+     "y": 17.4
+    },
+    "lapel": {
+     "x": 72,
+     "y": 89
+    }
+   }
+  },
+  {
+   "id": "sideeye",
+   "label": "Side-eye",
+   "file": "faces/sideeye.webp",
+   "anchors": {
+    "eyes": {
+     "x": 51.4,
+     "y": 39.5
+    },
+    "eyeL": {
+     "x": 41.5,
+     "y": 39.5
+    },
+    "eyeR": {
+     "x": 61.3,
+     "y": 39.5
+    },
+    "nose": {
+     "x": 54.3,
+     "y": 54.7
+    },
+    "mouth": {
+     "x": 62,
+     "y": 62.5
+    },
+    "ear": {
+     "x": 24.2,
+     "y": 39.8
+    },
+    "neck": {
+     "x": 51.5,
+     "y": 66.5
+    },
+    "head": {
+     "x": 51.5,
+     "y": 17.0
+    },
+    "lapel": {
+     "x": 72,
+     "y": 89
+    }
+   }
+  },
+  {
+   "id": "laughing",
+   "label": "Laughing",
+   "file": "faces/laughing.webp",
+   "anchors": {
+    "eyes": {
+     "x": 51.4,
+     "y": 37.0
+    },
+    "eyeL": {
+     "x": 41.5,
+     "y": 37.0
+    },
+    "eyeR": {
+     "x": 61.3,
+     "y": 37.0
+    },
+    "nose": {
+     "x": 53.0,
+     "y": 48.5
+    },
+    "mouth": {
+     "x": 63,
+     "y": 54
+    },
+    "ear": {
+     "x": 24.2,
+     "y": 39.8
+    },
+    "neck": {
+     "x": 51.5,
+     "y": 66.5
+    },
+    "head": {
+     "x": 51.5,
+     "y": 16.9
+    },
+    "lapel": {
+     "x": 72,
+     "y": 89
+    }
+   }
+  },
+  {
+   "id": "angry",
+   "label": "Angry",
+   "file": "faces/angry.webp",
+   "anchors": {
+    "eyes": {
+     "x": 51.4,
+     "y": 39.7
+    },
+    "eyeL": {
+     "x": 41.5,
+     "y": 39.7
+    },
+    "eyeR": {
+     "x": 61.3,
+     "y": 39.7
+    },
+    "nose": {
+     "x": 53.8,
+     "y": 53.0
+    },
+    "mouth": {
+     "x": 62,
+     "y": 61
+    },
+    "ear": {
+     "x": 24.2,
+     "y": 39.8
+    },
+    "neck": {
+     "x": 51.5,
+     "y": 66.5
+    },
+    "head": {
+     "x": 51.5,
+     "y": 16.9
+    },
+    "lapel": {
+     "x": 72,
+     "y": 89
+    }
+   }
+  }
+ ],
+ "props": [
+  {
+   "id": "shades",
+   "label": "Shades",
+   "snap": "eyes",
+   "sprites": [
+    {
+     "file": "props/shades.webp",
+     "pivot": {
+      "x": 0.5,
+      "y": 0.5
+     },
+     "widthPct": 38
+    }
+   ]
+  },
+  {
+   "id": "laser",
+   "label": "Laser eyes",
+   "snap": "eyes",
+   "sprites": [
+    {
+     "file": "props/laserL.webp",
+     "pivot": {
+      "x": 0.881,
+      "y": 0.5
+     },
+     "widthPct": 42,
+     "snap": "eyeL"
+    },
+    {
+     "file": "props/laserR.webp",
+     "pivot": {
+      "x": 0.1215,
+      "y": 0.5
+     },
+     "widthPct": 42,
+     "snap": "eyeR"
+    }
+   ]
+  },
+  {
+   "id": "cigar",
+   "label": "Cigar",
+   "snap": "mouth",
+   "sprites": [
+    {
+     "file": "props/cigar.webp",
+     "pivot": {
+      "x": 0.003,
+      "y": 0.775
+     },
+     "widthPct": 24
+    }
+   ],
+   "extras": [
+    {
+     "id": "smoke",
+     "label": "Smoke",
+     "file": "props/smoke2.webp",
+     "pivot": {
+      "x": 0.5,
+      "y": 1.0
+     },
+     "widthPct": 6.5,
+     "offsetFromSnap": {
+      "x": 23.5,
+      "y": -9.5
+     },
+     "defaultOn": true,
+     "variants": [
+      "props/smoke1.webp",
+      "props/smoke2.webp",
+      "props/smoke3.webp"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "chain",
+   "label": "Gold chain",
+   "snap": "neck",
+   "sprites": [
+    {
+     "file": "props/chain.webp",
+     "pivot": {
+      "x": 0.5,
+      "y": 0.0
+     },
+     "widthPct": 34
+    }
+   ]
+  },
+  {
+   "id": "nosering",
+   "label": "Nose ring",
+   "snap": "nose",
+   "offset": {
+    "x": 0,
+    "y": 0.8
+   },
+   "sprites": [
+    {
+     "file": "props/nosering.webp",
+     "pivot": {
+      "x": 0.5,
+      "y": 0.0
+     },
+     "widthPct": 5.5
+    }
+   ]
+  },
+  {
+   "id": "earring",
+   "label": "Earring",
+   "snap": "ear",
+   "sprites": [
+    {
+     "file": "props/hoop.webp",
+     "pivot": {
+      "x": 0.5,
+      "y": 0.0
+     },
+     "widthPct": 4.5
+    }
+   ]
+  },
+  {
+   "id": "crown",
+   "label": "Crown",
+   "snap": "head",
+   "sprites": [
+    {
+     "file": "props/crown.webp",
+     "pivot": {
+      "x": 0.5,
+      "y": 1.0
+     },
+     "widthPct": 20
+    }
+   ]
+  },
+  {
+   "id": "carnation",
+   "label": "Carnation",
+   "snap": "lapel",
+   "sprites": [
+    {
+     "file": "props/carnation.webp",
+     "pivot": {
+      "x": 0.5,
+      "y": 0.3
+     },
+     "widthPct": 6.5
+    }
+   ]
+  },
+  {
+   "id": "horns",
+   "label": "Horns",
+   "snap": "head",
+   "pfpOnly": true,
+   "sprites": [
+    {
+     "file": "props/horns.webp",
+     "pivot": {
+      "x": 0.5,
+      "y": 0.85
+     },
+     "widthPct": 40
+    }
+   ]
+  }
+ ]
+}

@@ -1,18 +1,30 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import confetti from 'canvas-confetti';
+import { useDraggable } from '../utils/useDraggable';
 import {
   SLOGAN,
   SUB_LABEL,
-  WEEKEND_BANNER,
   BULL_TAP_LINES,
   RAPID_TAP_LINE,
   PIN_TAP_LINES,
   IDLE_WATCH_LINE,
-  HERO_COPY
+  HERO_COPY,
+  UI_COPY
 } from '../copy.js';
-import { playBellSound, playSnortSound, isSoundEnabled, setSoundEnabled } from '../utils/audio';
+import { emitSteam } from '../utils/steam';
+import { playBellSound, playSample, isSoundEnabled, setSoundEnabled } from '../utils/audio';
 import { BuyButton } from './BuyButton';
-import { getNyseStatus } from './TickerTape';
+import { gsap } from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { isDesktopViewport } from '../utils/desktop';
+
+gsap.registerPlugin(ScrollTrigger);
+
+// =========================================================================
+// ENTRANCE & TRANSITION CONSTANTS
+// =========================================================================
+export const HERO_LEAVE_MIN_SCALE = 0.94;
+export const HERO_LEAVE_MIN_OPACITY = 0.4;
 
 // =========================================================================
 // NAMED CALIBRATION CONSTANTS (Tunable as specified in prompt)
@@ -29,39 +41,71 @@ export const LEFT_NOSTRIL = { x: 46.6, y: 49.8 };
 export const RIGHT_NOSTRIL = { x: 60.8, y: 49.6 };
 export const LAPEL_PIN = { x: 30.5, y: 83 };
 
-interface SteamPuff {
-  id: number;
-  startX: number;
-  startY: number;
-  sizePx: number;
-  risePx: number;
-  driftPx: number;
-}
+export const REGIONS = {
+  hornsMaxY: 31,
+  hornsLeftMaxX: 38,
+  hornsRightMinX: 62,
+  suitMinY: 66,
+} as const;
+
+type BullRegion = 'horns' | 'face' | 'suit';
+
+// Module-level eye mode persistence so toggle survives any remount
+let persistedEyeMode = false;
 
 export const Hero: React.FC = () => {
-  // Eye mode runtime toggle (defaults to false)
-  const [eyeMode, setEyeMode] = useState(false);
+  const getHeroSection = useCallback((el: HTMLElement) => el.closest('section'), []);
 
-  // Debug mode: ?debug=eyes in URL
+  const eyeBounds = useCallback((el: HTMLElement, isDragging: boolean) => {
+    const sec = el.closest('section');
+    const r = sec
+      ? sec.getBoundingClientRect()
+      : { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
+    const pad = 30;
+    const heroBounds = {
+      left: r.left + pad,
+      top: r.top + pad,
+      right: r.right - pad,
+      bottom: r.bottom - pad,
+    };
+    if (!isDragging) return heroBounds;
+
+    const t = document.querySelector('[data-ticker]');
+    const th = t ? t.getBoundingClientRect().height : 40;
+    return {
+      left: Math.max(heroBounds.left, pad),
+      top: Math.max(heroBounds.top, pad),
+      right: Math.min(heroBounds.right, window.innerWidth - pad),
+      bottom: Math.min(heroBounds.bottom, window.innerHeight - th - pad),
+    };
+  }, []);
+
+  const eyeDrag = useDraggable<HTMLDivElement>({
+    getBounds: eyeBounds,
+    getContainer: getHeroSection,
+    memoryKey: 'eye',
+  });
+
+  // Eye mode runtime toggle (persisted at module level across remounts)
+  const [eyeMode, setEyeMode] = useState<boolean>(() => persistedEyeMode);
+
+  // Debug modes: ?debug=eyes / ?debug=regions in URL
   const [debugEyes, setDebugEyes] = useState(false);
+  const [debugRegions, setDebugRegions] = useState(false);
+  const [lastDebugTap, setLastDebugTap] = useState<{ x: number; y: number; region: BullRegion } | null>(null);
 
   // Normalized pointer coordinates (-1 to 1)
   const [pointer, setPointer] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Head motion on tap
+  // Head motion on tap (face nod + region-specific CSS keyframe animations)
   const [headTransform, setHeadTransform] = useState('');
-
-  // Steam puffs
-  const [steamPuffs, setSteamPuffs] = useState<SteamPuff[]>([]);
+  const [headReaction, setHeadReaction] = useState<{ type: 'horns' | 'suit'; alt: boolean } | null>(null);
 
   // Pin sparkle
   const [pinSparkle, setPinSparkle] = useState(false);
 
   // Speech bubble
   const [speechBubble, setSpeechBubble] = useState<{ text: string; id: number } | null>(null);
-
-  // Buy button shake intensity
-  const [shakeIntensity, setShakeIntensity] = useState(0);
 
   // Bronze Bell swing physics state
   const [bellAngle, setBellAngle] = useState(0);
@@ -78,50 +122,176 @@ export const Hero: React.FC = () => {
   const [isEyeBlinking, setIsEyeBlinking] = useState(false);
   const [isEyeBouncing, setIsEyeBouncing] = useState(false);
 
-  // Tap tracking
+  // Tap tracking & per-region shuffled bags
   const tapCountRef = useRef(0);
   const lastTapTimeRef = useRef(0);
   const idleTimerRef = useRef<number | null>(null);
   const speechTimeoutRef = useRef<number | null>(null);
+  const reactionTimeoutRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const bullImgRef = useRef<HTMLImageElement>(null);
+  const steamLayerRef = useRef<HTMLDivElement>(null);
+  const regionBagRef = useRef<Record<BullRegion, string[]>>({
+    horns: [],
+    face: [],
+    suit: [],
+  });
+  const lastRegionLineRef = useRef<Partial<Record<BullRegion, string>>>({});
 
   // Check prefers-reduced-motion
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
 
-  // Live NYSE status for weekend banner
-  const [nyse, setNyse] = useState(() => getNyseStatus());
+  const sectionRef = useRef<HTMLElement>(null);
+  const bullLeaveRef = useRef<HTMLDivElement>(null);
+  const headerEntranceRef = useRef<HTMLElement>(null);
+  const headlineEntranceRef = useRef<HTMLDivElement>(null);
+  const bullEntranceRef = useRef<HTMLDivElement>(null);
+  const buyEntranceRef = useRef<HTMLDivElement>(null);
+
+  // Hero exit scrub: bull scales from 1 to 0.94 and fades to 0.4 opacity as hero leaves screen
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    if (media.matches) return;
+
+    const section = sectionRef.current;
+    const bullEl = bullLeaveRef.current;
+    if (!section || !bullEl) return;
+
+    const ctx = gsap.context(() => {
+      gsap.fromTo(
+        bullEl,
+        { scale: 1, opacity: 1 },
+        {
+          scale: HERO_LEAVE_MIN_SCALE,
+          opacity: HERO_LEAVE_MIN_OPACITY,
+          ease: 'none',
+          scrollTrigger: {
+            trigger: section,
+            start: 'top top',
+            end: 'bottom top',
+            scrub: true,
+          },
+        }
+      );
+    });
+
+    // 2-second fallback safety: ensure bull remains fully visible if trigger doesn't engage
+    const fallbackTimer = window.setTimeout(() => {
+      if (bullEl && window.scrollY === 0) {
+        gsap.set(bullEl, { scale: 1, opacity: 1 });
+      }
+    }, 2000);
+
+    return () => {
+      window.clearTimeout(fallbackTimer);
+      ctx.revert();
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const media = window.matchMedia('(prefers-reduced-motion: reduce)');
       setPrefersReducedMotion(media.matches);
       setDebugEyes(window.location.search.includes('debug=eyes'));
+      setDebugRegions(window.location.search.includes('debug=regions'));
     }
   }, []);
 
+  // Hero entrance animations run immediately on mount
   useEffect(() => {
-    const timer = setInterval(() => {
-      setNyse(getNyseStatus());
-    }, 1000);
-    return () => clearInterval(timer);
+    if (typeof window === 'undefined') return;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const targets = [
+      headerEntranceRef.current,
+      headlineEntranceRef.current,
+      buyEntranceRef.current,
+    ].filter(Boolean) as HTMLElement[];
+
+    if (reduced) {
+      targets.forEach((el) => gsap.set(el, { opacity: 1, y: 0 }));
+      if (bullEntranceRef.current) {
+        gsap.set(bullEntranceRef.current, { scale: 1, opacity: 1 });
+      }
+      return;
+    }
+
+    const ctx = gsap.context(() => {
+      gsap.fromTo(
+        targets,
+        { opacity: 0, y: 14 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.45,
+          stagger: 0.08,
+          ease: 'power2.out',
+          clearProps: 'transform',
+        }
+      );
+      if (bullEntranceRef.current) {
+        gsap.fromTo(
+          bullEntranceRef.current,
+          { scale: 0.96, opacity: 1 },
+          {
+            scale: 1,
+            opacity: 1,
+            duration: 0.45,
+            ease: 'power2.out',
+            clearProps: 'transform',
+          }
+        );
+      }
+    }, sectionRef);
+
+    return () => ctx.revert();
   }, []);
 
-  // Preload expression images
+  // Image preloading: load bull-hero-final first, then load other expressions after first paint
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const imagesToPreload = [
-        '/assets/bull-hero-final.png',
-        '/assets/bull-hero-nopupils.png',
-        '/assets/bull-browraise.png',
-        '/assets/bull-shocked.png',
-        '/assets/bull-smug.png',
-        '/assets/bull-watch.png',
+    if (typeof window === 'undefined') return;
+
+    // Load bull-hero-final first
+    const primaryImg = new Image();
+    primaryImg.src = '/assets/bull-hero-final.webp';
+
+    // Load other expressions after first paint via requestIdleCallback or short timeout
+    const loadDeferredExpressions = () => {
+      const otherExpressions = [
+        '/assets/bull-hero-nopupils.webp',
+        '/assets/bull-browraise.webp',
+        '/assets/bull-shocked.webp',
+        '/assets/bull-smug.webp',
+        '/assets/bull-watch.webp',
       ];
-      imagesToPreload.forEach((src) => {
+      otherExpressions.forEach((src) => {
         const img = new Image();
         img.src = src;
       });
+    };
+
+    let idleId: number | undefined;
+    let timeoutId: number | undefined;
+
+    const win = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+
+    if (typeof win.requestIdleCallback === 'function') {
+      idleId = win.requestIdleCallback(loadDeferredExpressions, { timeout: 1200 });
+    } else {
+      timeoutId = window.setTimeout(loadDeferredExpressions, 150);
     }
+
+    return () => {
+      if (idleId !== undefined && typeof win.cancelIdleCallback === 'function') {
+        win.cancelIdleCallback(idleId);
+      }
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, []);
 
   // Show a speech bubble with auto-dismiss
@@ -185,47 +355,51 @@ export const Hero: React.FC = () => {
     });
   };
 
-  // Steam emitter: 5 to 7 small flat puffs per nostril, cream (#E8DFC9) at 60% opacity
-  const emitSteam = useCallback(() => {
-    const leftCount = Math.floor(5 + Math.random() * 3); // 5 to 7
-    const rightCount = Math.floor(5 + Math.random() * 3); // 5 to 7
-    const puffs: SteamPuff[] = [];
-    let idCounter = Date.now();
-
-    // Left nostril puffs
-    for (let i = 0; i < leftCount; i++) {
-      puffs.push({
-        id: idCounter++,
-        startX: LEFT_NOSTRIL.x + (Math.random() - 0.5) * 1.5,
-        startY: LEFT_NOSTRIL.y + (Math.random() - 0.5) * 1.5,
-        sizePx: Math.round(8 + Math.random() * 8), // 8 to 16px
-        risePx: Math.round(40 + Math.random() * 30), // 40 to 70px
-        driftPx: -Math.round(8 + Math.random() * 14), // drift left
+  // Nostril steam emitter using shared emitSteam helper
+  const emitNostrilSteam = useCallback(() => {
+    const layer = steamLayerRef.current;
+    if (layer && !prefersReducedMotion) {
+      const w = layer.clientWidth;
+      const h = layer.clientHeight;
+      const jitterPx = w * 0.0075; // +-0.75% around nostril coordinates
+      emitSteam(layer, (LEFT_NOSTRIL.x / 100) * w, (LEFT_NOSTRIL.y / 100) * h, {
+        scale: 1,
+        driftDir: -1,
+        jitterPx,
+      });
+      emitSteam(layer, (RIGHT_NOSTRIL.x / 100) * w, (RIGHT_NOSTRIL.y / 100) * h, {
+        scale: 1,
+        driftDir: 1,
+        jitterPx,
       });
     }
+    playSample('snort');
+  }, [prefersReducedMotion]);
 
-    // Right nostril puffs
-    for (let i = 0; i < rightCount; i++) {
-      puffs.push({
-        id: idCounter++,
-        startX: RIGHT_NOSTRIL.x + (Math.random() - 0.5) * 1.5,
-        startY: RIGHT_NOSTRIL.y + (Math.random() - 0.5) * 1.5,
-        sizePx: Math.round(8 + Math.random() * 8), // 8 to 16px
-        risePx: Math.round(40 + Math.random() * 30), // 40 to 70px
-        driftPx: Math.round(8 + Math.random() * 14), // drift right
-      });
+  // Shuffled-bag line picker per region: never repeats within a bag or across bag refill
+  const takeRegionLine = useCallback((region: BullRegion): string => {
+    const pool = BULL_TAP_LINES[region];
+    let bag = regionBagRef.current[region];
+    if (bag.length === 0) {
+      bag = [...pool];
+      for (let i = bag.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [bag[i], bag[j]] = [bag[j], bag[i]];
+      }
+      const last = lastRegionLineRef.current[region];
+      if (last && bag.length > 1 && bag[bag.length - 1] === last) {
+        const swapIdx = Math.floor(Math.random() * (bag.length - 1));
+        [bag[bag.length - 1], bag[swapIdx]] = [bag[swapIdx], bag[bag.length - 1]];
+      }
+      regionBagRef.current[region] = bag;
     }
-
-    setSteamPuffs(puffs);
-    playSnortSound();
-
-    setTimeout(() => {
-      setSteamPuffs([]);
-    }, 950);
+    const next = bag.pop()!;
+    lastRegionLineRef.current[region] = next;
+    return next;
   }, []);
 
-  // Tap Bull handler
-  const handleBullTap = (e: React.MouseEvent) => {
+  // Tap Bull handler (region-aware lines & physical reactions)
+  const handleBullTap = (e: React.MouseEvent<HTMLDivElement>) => {
     e.stopPropagation();
     resetIdleTimer();
 
@@ -238,24 +412,72 @@ export const Hero: React.FC = () => {
     }
     lastTapTimeRef.current = now;
 
-    // Small head motion (rotate up to 1.5deg, scale 1.015, back)
-    if (!prefersReducedMotion) {
-      const rot = (tapCountRef.current % 2 === 0 ? 1 : -1) * 1.5;
-      setHeadTransform(`rotate(${rot}deg) scale(1.015)`);
-      setTimeout(() => {
-        setHeadTransform('rotate(0deg) scale(1)');
-      }, 140);
+    // Compute tap position as % of the bull image rectangle
+    const rect = (bullImgRef.current ?? e.currentTarget).getBoundingClientRect();
+    const hasCoords = e.clientX !== 0 || e.clientY !== 0;
+    const xPct =
+      hasCoords && rect.width > 0 ? ((e.clientX - rect.left) / rect.width) * 100 : 50;
+    const yPct =
+      hasCoords && rect.height > 0 ? ((e.clientY - rect.top) / rect.height) * 100 : 45;
+
+    let region: BullRegion = 'face';
+    if (
+      yPct < REGIONS.hornsMaxY &&
+      (xPct < REGIONS.hornsLeftMaxX || xPct > REGIONS.hornsRightMinX)
+    ) {
+      region = 'horns';
+    } else if (yPct >= REGIONS.suitMinY) {
+      region = 'suit';
     }
 
-    // Emit steam
-    emitSteam();
+    if (debugRegions) {
+      setLastDebugTap({ x: xPct, y: yPct, region });
+    }
 
-    // Speech line (stays deadpan on multiple taps, never changes expression)
+    // Region-specific reaction
+    if (reactionTimeoutRef.current) {
+      clearTimeout(reactionTimeoutRef.current);
+      reactionTimeoutRef.current = null;
+    }
+
+    if (region === 'horns') {
+      // Horns: quick head shake (rotate +-2deg, three times, 260ms) and no steam
+      playSample('grunt', { gain: 0.75 });
+      if (!prefersReducedMotion) {
+        setHeadTransform('');
+        setHeadReaction((prev) => ({ type: 'horns', alt: !prev?.alt }));
+        reactionTimeoutRef.current = window.setTimeout(() => {
+          setHeadReaction(null);
+        }, 260);
+      }
+    } else if (region === 'suit') {
+      // Suit: tiny settle (scale 1.01 and back, 160ms) and no steam
+      if (!prefersReducedMotion) {
+        setHeadTransform('');
+        setHeadReaction((prev) => ({ type: 'suit', alt: !prev?.alt }));
+        reactionTimeoutRef.current = window.setTimeout(() => {
+          setHeadReaction(null);
+        }, 160);
+      }
+    } else {
+      // Face: nostril steam + subtle nod
+      setHeadReaction(null);
+      if (!prefersReducedMotion) {
+        const rot = (tapCountRef.current % 2 === 0 ? 1 : -1) * 1.5;
+        setHeadTransform(`rotate(${rot}deg) scale(1.015)`);
+        setTimeout(() => {
+          setHeadTransform('rotate(0deg) scale(1)');
+        }, 140);
+      }
+      emitNostrilSteam();
+    }
+
+    // Speech line (rapid-tap line >= 5 taps, otherwise shuffled bag for tapped region)
     if (tapCountRef.current >= 5) {
       showSpeech(RAPID_TAP_LINE, 3000);
     } else {
-      const randomLine = BULL_TAP_LINES[Math.floor(Math.random() * BULL_TAP_LINES.length)];
-      showSpeech(randomLine, 3500);
+      const regionLine = takeRegionLine(region);
+      showSpeech(regionLine, 3500);
     }
   };
 
@@ -279,6 +501,7 @@ export const Hero: React.FC = () => {
       setTimeout(() => setIsEyeBouncing(false), 300);
     }
     const nextMode = !eyeMode;
+    persistedEyeMode = nextMode;
     setEyeMode(nextMode);
     if (nextMode && !prefersReducedMotion) {
       setIsEyeBlinking(true);
@@ -341,6 +564,14 @@ export const Hero: React.FC = () => {
     const decay = 1.9; // exponential damping settling over ~2.5s
 
     const step = (now: number) => {
+      if (isDesktopViewport() && document.hidden) {
+        bellRafRef.current = null;
+        setIsBellSwinging(false);
+        bellEnergyRef.current = 0;
+        setBellAngle(0);
+        setClapperAngle(0);
+        return;
+      }
       const elapsed = (now - bellStartTimeRef.current) / 1000;
       if (elapsed > 2.5 || bellEnergyRef.current <= 0.1) {
         setIsBellSwinging(false);
@@ -365,10 +596,11 @@ export const Hero: React.FC = () => {
     bellRafRef.current = requestAnimationFrame(step);
   };
 
-  // Cleanup bell RAF on unmount
+  // Cleanup bell & reaction timers on unmount
   useEffect(() => {
     return () => {
       if (bellRafRef.current) cancelAnimationFrame(bellRafRef.current);
+      if (reactionTimeoutRef.current) clearTimeout(reactionTimeoutRef.current);
     };
   }, []);
 
@@ -388,16 +620,11 @@ export const Hero: React.FC = () => {
     ? `perspective(800px) rotateX(${-pointer.y * 3}deg) rotateY(${pointer.x * 3.5}deg) translate3d(${pointer.x * 4}px, ${pointer.y * 4}px, 0)`
     : '';
 
-  const shakeTransform =
-    shakeIntensity > 0 && !prefersReducedMotion
-      ? `translate(${(Math.random() - 0.5) * (shakeIntensity * 0.1)}px, ${(Math.random() - 0.5) * (shakeIntensity * 0.1)}px)`
-      : '';
-
   return (
-    <section className="relative w-full min-h-screen bg-black flex flex-col items-center justify-between pt-6 pb-20 px-4 overflow-hidden select-none">
+    <section ref={sectionRef} className="hero-section relative w-full min-h-screen bg-black flex flex-col items-center justify-between pt-6 pb-20 px-4 overflow-hidden select-none">
       
       {/* Top Header Bar */}
-      <header className="w-full max-w-5xl flex items-center justify-between z-30 px-2 sm:px-6 pt-1">
+      <header ref={headerEntranceRef} className="w-full max-w-5xl flex items-center justify-between z-30 px-2 sm:px-6 pt-1">
         <div className="flex items-center gap-2">
           <div className="w-2.5 h-2.5 bg-[#C97B1A] rotate-45" />
           <span className="font-plex text-xs sm:text-sm font-bold tracking-widest text-[#E8DFC9] uppercase">
@@ -497,15 +724,6 @@ export const Hero: React.FC = () => {
         </svg>
       </button>
 
-      {/* Weekend Banner */}
-      {nyse.isWeekend && (
-        <div className="w-full max-w-2xl mt-3 z-30 px-3">
-          <div className="bg-[#C23B22] text-white border-2 border-black px-4 py-2 font-anton text-sm sm:text-base tracking-wider text-center uppercase shadow-[3px_3px_0_#C97B1A]">
-            ⚠️ {WEEKEND_BANNER}
-          </div>
-        </div>
-      )}
-
       {/* Main Bull Character Stage */}
       <div
         ref={containerRef}
@@ -514,30 +732,40 @@ export const Hero: React.FC = () => {
         className="relative w-full max-w-xl flex flex-col items-center justify-center my-auto cursor-crosshair touch-pan-y"
       >
         {/* Huge Slogan Headline (Anton) */}
-        <div className="w-full text-center mt-2 mb-1 z-30 pointer-events-none">
-          <h1 className="font-anton text-4xl sm:text-6xl md:text-7xl lg:text-8xl tracking-tight leading-[0.9] uppercase text-white drop-shadow-[0_4px_12px_rgba(0,0,0,0.9)]">
-            <span className="text-[#C97B1A]">THE BULLS</span> <br className="sm:hidden" />
-            <span className="text-[#E8DFC9]">ARE ONCHAIN.</span>
+        <div ref={headlineEntranceRef} className="w-full text-center mt-2 mb-1 z-30 pointer-events-none">
+          <h1 className="hero-slogan font-anton text-4xl sm:text-6xl md:text-7xl lg:text-8xl tracking-tight leading-[0.9] uppercase text-white drop-shadow-[0_4px_12px_rgba(0,0,0,0.9)]">
+            <span className="text-[#C97B1A]">{UI_COPY.hero.sloganLine1}</span> <br className="sm:hidden" />
+            <span className="text-[#E8DFC9]">{UI_COPY.hero.sloganLine2}</span>
           </h1>
         </div>
 
-        {/* Mascot Container */}
-        <div
-          className="relative w-[310px] h-[310px] sm:w-[420px] sm:h-[420px] md:w-[480px] md:h-[480px] flex items-center justify-center"
-          style={{
-            transform: `${parallaxTransform} ${shakeTransform}`,
-            transition: shakeIntensity > 0 ? 'none' : 'transform 0.12s ease-out',
-          }}
-        >
+        {/* Mascot Container Leave Scrub Wrapper */}
+        <div ref={bullLeaveRef} className="relative flex items-center justify-center will-change-transform">
+          {/* Mascot Container */}
+          <div
+            ref={bullEntranceRef}
+            className="hero-bull-stage relative w-[310px] h-[310px] sm:w-[420px] sm:h-[420px] md:w-[480px] md:h-[480px] flex items-center justify-center"
+            style={{
+              transform: parallaxTransform || undefined,
+              transition: 'transform 0.12s ease-out',
+            }}
+          >
           {/* Edge-softening Mask Bull Container with Head Motion on Tap */}
           <div
             onClick={handleBullTap}
+            data-no-tapfx
             className="relative w-full h-full bull-mask cursor-pointer"
             style={{
               transform: headTransform,
+              animation:
+                !prefersReducedMotion && headReaction
+                  ? headReaction.type === 'horns'
+                    ? `${headReaction.alt ? 'bullHornShakeA' : 'bullHornShakeB'} 260ms ease-out`
+                    : `${headReaction.alt ? 'bullSuitSettleA' : 'bullSuitSettleB'} 160ms ease-out`
+                  : undefined,
               transition: prefersReducedMotion ? 'none' : 'transform 0.14s cubic-bezier(0.2, 0.8, 0.4, 1)',
             }}
-            title="Tap the Bull"
+            title={UI_COPY.hero.tapBullTitle}
           >
             {/* ================================================================= */}
             {/* SVG CLIP PATHS FOR ALMOND-SHAPED EYE WHITES                       */}
@@ -558,18 +786,19 @@ export const Hero: React.FC = () => {
             {/* STACKED EXPRESSIONS (Crossfade 250ms, identical size & position)  */}
             {/* ================================================================= */}
 
-            {/* 1. Deadpan (bull-hero-final.png) */}
-            {/* Base Mascot: Deadpan Bull (bull-hero-final.png) with original eyes */}
+            {/* 1. Deadpan (bull-hero-final.webp) */}
+            {/* Base Mascot: Deadpan Bull (bull-hero-final.webp) with original eyes */}
             <img
-              src="/assets/bull-hero-final.png"
+              ref={bullImgRef}
+              src="/assets/bull-hero-final.webp"
               alt="Deadpan bronze bull in black business suit"
-              width={1254}
-              height={1254}
+              width={900}
+              height={900}
               className="absolute inset-0 w-full h-full object-contain pointer-events-none"
             />
 
             {/* ================================================================= */}
-            {/* EYE MODE LAYER: bull-hero-nopupils.png + Live Almond Clipped Pupils */}
+            {/* EYE MODE LAYER: bull-hero-nopupils.webp + Live Almond Clipped Pupils */}
             {/* Crossfade (200ms)                                                 */}
             {/* ================================================================= */}
             <div
@@ -579,10 +808,10 @@ export const Hero: React.FC = () => {
               style={{ opacity: eyeMode ? 1 : 0 }}
             >
               <img
-                src="/assets/bull-hero-nopupils.png"
+                src="/assets/bull-hero-nopupils.webp"
                 alt="Bull mascot eye whites"
-                width={1254}
-                height={1254}
+                width={900}
+                height={900}
                 className="w-full h-full object-contain"
               />
 
@@ -728,25 +957,90 @@ export const Hero: React.FC = () => {
             )}
 
             {/* ================================================================= */}
-            {/* FLAT STEAM PUFFS (5-7 per nostril, 8-16px, cream #E8DFC9 @ 60%)   */}
+            {/* DEBUG REGIONS OVERLAY (?debug=regions)                            */}
             {/* ================================================================= */}
-            {steamPuffs.map((puff) => (
-              <div
-                key={puff.id}
-                className="absolute pointer-events-none rounded-full"
-                style={{
-                  left: `${puff.startX}%`,
-                  top: `${puff.startY}%`,
-                  width: `${puff.sizePx}px`,
-                  height: `${puff.sizePx}px`,
-                  backgroundColor: 'rgba(232, 223, 201, 0.6)',
-                  animation: prefersReducedMotion ? 'none' : `puffRise 0.9s cubic-bezier(0.25, 1, 0.5, 1) forwards`,
-                  transform: 'translate(-50%, -50%)',
-                  ['--rise-y' as string]: `-${puff.risePx}px`,
-                  ['--drift-x' as string]: `${puff.driftPx}px`,
-                }}
-              />
-            ))}
+            {debugRegions && (
+              <div className="absolute inset-0 pointer-events-none z-50">
+                {/* Horns Left */}
+                <div
+                  className="absolute border-2 border-dashed border-[#F2B24A] bg-[#F2B24A]/10 flex items-start justify-start p-1"
+                  style={{
+                    left: 0,
+                    top: 0,
+                    width: `${REGIONS.hornsLeftMaxX}%`,
+                    height: `${REGIONS.hornsMaxY}%`,
+                  }}
+                >
+                  <span className="bg-black/85 text-[#F2B24A] font-plex text-[10px] px-1">HORNS L</span>
+                </div>
+
+                {/* Horns Right */}
+                <div
+                  className="absolute border-2 border-dashed border-[#F2B24A] bg-[#F2B24A]/10 flex items-start justify-end p-1"
+                  style={{
+                    left: `${REGIONS.hornsRightMinX}%`,
+                    top: 0,
+                    width: `${100 - REGIONS.hornsRightMinX}%`,
+                    height: `${REGIONS.hornsMaxY}%`,
+                  }}
+                >
+                  <span className="bg-black/85 text-[#F2B24A] font-plex text-[10px] px-1">HORNS R</span>
+                </div>
+
+                {/* Face Polygon */}
+                <svg
+                  viewBox="0 0 100 100"
+                  preserveAspectRatio="none"
+                  className="absolute inset-0 w-full h-full"
+                >
+                  <polygon
+                    points={`${REGIONS.hornsLeftMaxX},0 ${REGIONS.hornsRightMinX},0 ${REGIONS.hornsRightMinX},${REGIONS.hornsMaxY} 100,${REGIONS.hornsMaxY} 100,${REGIONS.suitMinY} 0,${REGIONS.suitMinY} 0,${REGIONS.hornsMaxY} ${REGIONS.hornsLeftMaxX},${REGIONS.hornsMaxY}`}
+                    fill="rgba(56, 189, 248, 0.1)"
+                    stroke="#38BDF8"
+                    strokeWidth="0.6"
+                    strokeDasharray="2 1.5"
+                  />
+                </svg>
+                <div
+                  className="absolute px-1 bg-black/85 text-[#38BDF8] font-plex text-[10px]"
+                  style={{ left: '50%', top: `${REGIONS.hornsMaxY + 2}%`, transform: 'translateX(-50%)' }}
+                >
+                  FACE
+                </div>
+
+                {/* Suit */}
+                <div
+                  className="absolute border-2 border-dashed border-[#2FD27A] bg-[#2FD27A]/10 flex items-end justify-end p-1"
+                  style={{
+                    left: 0,
+                    top: `${REGIONS.suitMinY}%`,
+                    width: '100%',
+                    height: `${100 - REGIONS.suitMinY}%`,
+                  }}
+                >
+                  <span className="bg-black/85 text-[#2FD27A] font-plex text-[10px] px-1">SUIT</span>
+                </div>
+
+                {/* Pin tap box */}
+                <div
+                  className="absolute w-12 h-12 -translate-x-1/2 -translate-y-1/2 border-2 border-dashed border-[#C23B22] flex items-center justify-center"
+                  style={{ left: `${LAPEL_PIN.x}%`, top: `${LAPEL_PIN.y}%` }}
+                >
+                  <span className="bg-black/85 text-[#C23B22] font-plex text-[9px] px-0.5">PIN</span>
+                </div>
+
+                {lastDebugTap && (
+                  <div className="absolute bottom-2 left-2 bg-black/90 text-[#E8DFC9] font-plex text-[10px] px-2 py-1 border border-[#C97B1A]">
+                    tap ({lastDebugTap.x.toFixed(1)}%, {lastDebugTap.y.toFixed(1)}%) → {lastDebugTap.region}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ================================================================= */}
+            {/* NOSTRIL STEAM LAYER (imperative puffs via emitSteam)              */}
+            {/* ================================================================= */}
+            <div ref={steamLayerRef} className="absolute inset-0 pointer-events-none" />
 
             {/* ================================================================= */}
             {/* INVISIBLE PIN TAP AREA (>= 44px, no visible circle, no outline)   */}
@@ -776,13 +1070,15 @@ export const Hero: React.FC = () => {
                 </div>
               )}
             </button>
+          </div>
 
-            {/* ================================================================= */}
-            {/* 2. EYE BUTTON STICKER                                             */}
-            {/* Round sticker attached to bull image at his right shoulder        */}
-            {/* (x: 82%, y: 72%), not overlapping pin (30.5%, 83%) or buy ticket  */}
-            {/* Lid closed when OFF, quick blink on toggle, tiny pupil tracks ptr */}
-            {/* ================================================================= */}
+          {/* Draggable Eye Button Sticker (moved outside .bull-mask so it is not clipped) */}
+          <div
+            ref={eyeDrag.ref}
+            {...eyeDrag.bind}
+            className="absolute z-30"
+            style={{ left: '82%', top: '72%', width: 0, height: 0, ...eyeDrag.style }}
+          >
             <button
               type="button"
               onClick={handleEyeToggle}
@@ -792,7 +1088,7 @@ export const Hero: React.FC = () => {
               className={`absolute min-w-[48px] min-h-[48px] w-12 h-12 sm:w-14 sm:h-14 -translate-x-1/2 -translate-y-1/2 z-30 rounded-full bg-[#C97B1A] hover:bg-[#F2B24A] text-black border-[2.5px] border-black shadow-[2px_2px_0_#000] cursor-pointer flex items-center justify-center rotate-6 transition-colors focus-visible:ring-2 focus-visible:ring-[#F2B24A] outline-none ${
                 isEyeBouncing ? 'animate-sticker-squash' : ''
               }`}
-              style={{ left: '82%', top: '72%' }}
+              style={{ left: 0, top: 0 }}
             >
               <svg
                 viewBox="0 0 28 28"
@@ -882,14 +1178,13 @@ export const Hero: React.FC = () => {
             </div>
           )}
         </div>
+      </div>
 
         {/* ORDER TICKET BUY BUTTON */}
-        <div className="w-full flex justify-center mt-2 z-30">
+        <div ref={buyEntranceRef} className="hero-buy-wrap w-full flex justify-center mt-2 z-30">
           <BuyButton
-            onChargingChange={(pct) => setShakeIntensity(pct)}
-            onEarlyRelease={(msg) => showSpeech(msg, 3000)}
-            onChargeComplete={() => {
-              emitSteam();
+            onBuyTap={() => {
+              emitNostrilSteam();
               showSpeech(HERO_COPY.orderSubmitted, 4000);
             }}
           />
@@ -916,18 +1211,31 @@ export const Hero: React.FC = () => {
         .animate-sticker-squash {
           animation: stickerSquash 0.3s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
         }
-        @keyframes puffRise {
-          0% {
-            opacity: 0.6;
-            transform: translate(-50%, -50%) translate3d(0, 0, 0) scale(0.7);
-          }
-          70% {
-            opacity: 0.45;
-          }
-          100% {
-            opacity: 0;
-            transform: translate(-50%, -50%) translate3d(var(--drift-x, 0), var(--rise-y, -50px), 0) scale(1.3);
-          }
+        @keyframes bullHornShakeA {
+          0%, 100% { transform: rotate(0deg); }
+          12% { transform: rotate(-2deg); }
+          26% { transform: rotate(2deg); }
+          40% { transform: rotate(-2deg); }
+          54% { transform: rotate(2deg); }
+          70% { transform: rotate(-2deg); }
+          85% { transform: rotate(2deg); }
+        }
+        @keyframes bullHornShakeB {
+          0%, 100% { transform: rotate(0deg); }
+          12% { transform: rotate(-2deg); }
+          26% { transform: rotate(2deg); }
+          40% { transform: rotate(-2deg); }
+          54% { transform: rotate(2deg); }
+          70% { transform: rotate(-2deg); }
+          85% { transform: rotate(2deg); }
+        }
+        @keyframes bullSuitSettleA {
+          0%, 100% { transform: scale(1); }
+          45% { transform: scale(1.01); }
+        }
+        @keyframes bullSuitSettleB {
+          0%, 100% { transform: scale(1); }
+          45% { transform: scale(1.01); }
         }
         @keyframes sparkleFade {
           0% {

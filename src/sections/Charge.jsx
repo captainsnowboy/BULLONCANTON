@@ -1,20 +1,28 @@
-import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { CHARGE_COPY } from '../copy.js';
-import { playImpactThud } from '../utils/audio';
-import { ArrowDown } from 'lucide-react';
+import { CHARGE_COPY, UI_COPY } from '../copy.js';
+import { playImpactThud, playPaperFlick, playSample } from '../utils/audio';
+import { isDesktopViewport } from '../utils/desktop';
 
 gsap.registerPlugin(ScrollTrigger);
+ScrollTrigger.config({ ignoreMobileResize: true });
 
 // =========================================================================
 // 1. ENGINE CONSTANTS (Tunable as specified in prompt)
 // =========================================================================
+export const TORN_EDGE_ENTRANCE_OFFSET = -24; // px
+export const TORN_EDGE_ENTRANCE_DURATION = 0.22; // 220ms
+export const TORN_EDGE_SHAKE_PX = 4;
+export const TORN_EDGE_THRESHOLD = 0.15; // 15% visible
+
 export const HOLD_SECONDS = 5;
 export const RAM_THRESHOLDS = [0.62, 0.78, 0.90];
 export const BREACH = 1;
 export const BRICK_CAP = 60;
-
+export const CARD_ROTATIONS = [-1.8, 1.5, -1.0, 0.5];
+export const CARD_Y_OFFSETS = [-12, -8, -4, 0];
+export const CARD_Z_INDICES = [1, 2, 3, 10];
 // Deterministic brick configuration: 11 rows of running bond (total 49 front bricks)
 const FRONT_BRICK_COLORS = ['#B5472B', '#A23D25', '#BF5233'];
 const FRONT_BRICK_ROWS = [
@@ -59,12 +67,24 @@ export const Charge = () => {
   const stageRef = useRef(null);
   const rumbleRef = useRef(null);
   const groundStripRef = useRef(null);
+  const wallSceneGroupRef = useRef(null);
+  const isWallSceneRevealedRef = useRef(false);
+  const tornEdgeRef = useRef(null);
+  const hasTornEdgeDroppedRef = useRef(false);
 
   // Intro Newspaper elements
   const cardsContainerRef = useRef(null);
+  const cardWrappersRef = useRef([]);
   const newsPagesRef = useRef([]);
   const stampsRef = useRef([]);
   const peekBullRef = useRef(null);
+  const tossCountRef = useRef(0);
+  const peekIdleTimeoutRef = useRef(null);
+
+  // Stage ResizeObserver tracking (recomputes wall/bull proportions inside stage without rewriting section height)
+  const lastObservedWRef = useRef(0);
+  const lastObservedHRef = useRef(0);
+  const roDebounceTimerRef = useRef(null);
 
   // Bull elements
   const bullContainerRef = useRef(null);
@@ -96,9 +116,10 @@ export const Charge = () => {
   const hasTriggeredWallDustRef = useRef(false);
 
   // Closing scene elements
+  const bullAreaRef = useRef(null);
   const standingBullRef = useRef(null);
   const speechBubbleRef = useRef(null);
-  const scrollArrowRef = useRef(null);
+  const [signLayout, setSignLayout] = useState({ visible: false, width: 0, left: 0 });
 
   // Controls elements
   const progressBarFillRef = useRef(null);
@@ -134,6 +155,8 @@ export const Charge = () => {
   const [displayedHeadline, setDisplayedHeadline] = useState(CHARGE_COPY.beat1.heading);
   const [headlineOpacity, setHeadlineOpacity] = useState(1);
   const [peekReady, setPeekReady] = useState(false);
+  const [topIdx, setTopIdx] = useState(3);
+  const [hasTossed, setHasTossed] = useState(false);
 
   // Debug panel state: strictly enabled ONLY when URL contains ?debug=charge
   const [isDebug, setIsDebug] = useState(() => {
@@ -159,12 +182,20 @@ export const Charge = () => {
   const damageLevelRef = useRef(0);
   const isAnimatingRamRef = useRef(false);
   const isHoldingRef = useRef(false);
+  const activePointerIdRef = useRef(null);
+  const holdStartTimeRef = useRef(0);
   const isBrokenRef = useRef(false);
   const lastThresholdReachedRef = useRef(0);
   const desktopStRef = useRef(null);
+  const scrollDrivenRef = useRef(false);
+  const reducedMotionRef = useRef(false);
+  const scrollLockCleanupRef = useRef(null);
+  const scheduleTickRef = useRef(() => {});
   const introStartedRef = useRef(false);
   const headlineTargetRef = useRef(CHARGE_COPY.beat1.heading);
   const isSwappingHeadlineRef = useRef(false);
+
+  reducedMotionRef.current = reducedMotion;
 
   // Opaque sprite measurement cache
   const opaqueBoundsRef = useRef({
@@ -182,7 +213,7 @@ export const Charge = () => {
   // Measure sprite's opaque bounding box once on load
   useEffect(() => {
     const img = new Image();
-    img.src = '/assets/bull-charge.png';
+    img.src = '/assets/bull-charge.webp';
     img.onload = () => {
       try {
         const canvas = document.createElement('canvas');
@@ -239,18 +270,50 @@ export const Charge = () => {
     return () => motionQuery.removeEventListener('change', handleMotion);
   }, []);
 
-  // Measure ticker real height and set --ticker-h
+  // Keep ticker height CSS var synced and refresh ScrollTrigger after real width/orientation changes
   useEffect(() => {
-    const updateTickerH = () => {
-      const ticker = document.querySelector('aside[aria-label="Market Ticker"]');
-      const h = ticker ? ticker.getBoundingClientRect().height : 36;
+    if (typeof window === 'undefined') return;
+
+    let lastWidth = window.innerWidth;
+
+    const updateTickerHeight = () => {
+      const ticker = document.querySelector('[data-ticker]');
+      const h = ticker ? ticker.getBoundingClientRect().height : 40;
       if (containerRef.current) {
         containerRef.current.style.setProperty('--ticker-h', `${h}px`);
       }
     };
-    updateTickerH();
-    window.addEventListener('resize', updateTickerH);
-    return () => window.removeEventListener('resize', updateTickerH);
+
+    updateTickerHeight();
+
+    const handleResize = () => {
+      const curW = window.innerWidth;
+      if (Math.abs(curW - lastWidth) > 2) {
+        lastWidth = curW;
+        updateTickerHeight();
+        ScrollTrigger.refresh();
+      }
+    };
+
+    const handleOrientation = () => {
+      lastWidth = window.innerWidth;
+      updateTickerHeight();
+      ScrollTrigger.refresh();
+    };
+
+    window.addEventListener('resize', handleResize, { passive: true });
+    window.addEventListener('orientationchange', handleOrientation);
+
+    if (document.readyState === 'complete') {
+      ScrollTrigger.refresh();
+    } else {
+      window.addEventListener('load', () => ScrollTrigger.refresh(), { once: true });
+    }
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleOrientation);
+    };
   }, []);
 
   // -----------------------------------------------------------------------
@@ -334,7 +397,7 @@ export const Charge = () => {
     };
   }, []);
 
-  // ResizeObserver on Stage
+  // ResizeObserver on Stage (debounced to ~150ms, ignoring height-only changes < 120px when width is unchanged)
   useEffect(() => {
     const stageEl = stageRef.current;
     if (!stageEl) return;
@@ -344,15 +407,106 @@ export const Charge = () => {
         const { width, height } = entry.contentRect;
         const sw = Math.round(width);
         const sh = Math.round(height);
-        stageEl.style.setProperty('--sw', `${sw}px`);
-        stageEl.style.setProperty('--sh', `${sh}px`);
-        setStageSizes(computeSizes(sw, sh));
+
+        const prevW = lastObservedWRef.current;
+        const prevH = lastObservedHRef.current;
+
+        // Ignore height-only changes smaller than 120px when the width has not changed
+        if (prevW > 0 && Math.abs(sw - prevW) <= 2 && Math.abs(sh - prevH) < 120) {
+          continue;
+        }
+
+        if (roDebounceTimerRef.current) {
+          clearTimeout(roDebounceTimerRef.current);
+        }
+
+        roDebounceTimerRef.current = setTimeout(() => {
+          lastObservedWRef.current = sw;
+          lastObservedHRef.current = sh;
+          stageEl.style.setProperty('--sw', `${sw}px`);
+          stageEl.style.setProperty('--sh', `${sh}px`);
+          setStageSizes(computeSizes(sw, sh));
+        }, 150);
       }
     });
 
     ro.observe(stageEl);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      if (roDebounceTimerRef.current) clearTimeout(roDebounceTimerRef.current);
+    };
   }, [computeSizes]);
+
+  // Closing scene WALL ST. sign placement: beside standing bull without touching shoes or ground line
+  const updateSignLayout = useCallback(() => {
+    const areaEl = bullAreaRef.current;
+    const bullEl = standingBullRef.current;
+    if (!areaEl || !bullEl || !stageSizes.sw) return;
+
+    const areaW = areaEl.clientWidth;
+    const areaH = areaEl.clientHeight;
+    if (areaW <= 0 || areaH <= 0) return;
+
+    const bullH = bullEl.offsetHeight || Math.min(380, Math.max(200, areaH - 60));
+    const bullBoxW = bullEl.offsetWidth;
+    const intrinsicRatio = 700 / 1050;
+    const drawnBullW = bullBoxW > 0 ? Math.min(bullBoxW, bullH * intrinsicRatio) : bullH * intrinsicRatio;
+
+    // Rightmost edge of the bull's right shoe (~84% across rendered bull image, centered in areaW)
+    const shoeRightX = areaW / 2 + drawnBullW * 0.34;
+    const minBboxLeft = shoeRightX + 12;
+    const maxBboxRight = areaW - 2;
+    const availBboxW = maxBboxRight - minBboxLeft;
+
+    if (availBboxW <= 0) {
+      setSignLayout((prev) => (prev.visible ? { ...prev, visible: false } : prev));
+      return;
+    }
+
+    const theta = (10 * Math.PI) / 180;
+    const signAspect = 190 / 545;
+    const bboxFactor = Math.cos(theta) + signAspect * Math.sin(theta);
+
+    const maxW = stageSizes.sw * 0.34;
+    const minW = stageSizes.sw * 0.24;
+    const maxFitW = availBboxW / bboxFactor;
+    const width = Math.min(maxW, maxFitW);
+
+    if (width < minW) {
+      setSignLayout((prev) => (prev.visible ? { ...prev, visible: false } : prev));
+      return;
+    }
+
+    const bboxW = width * bboxFactor;
+    const leftOverhang = width * signAspect * Math.sin(theta);
+    const bboxLeft = minBboxLeft + Math.max(0, (availBboxW - bboxW) * 0.5);
+    const left = bboxLeft + leftOverhang;
+
+    setSignLayout((prev) => {
+      if (
+        prev.visible &&
+        Math.abs(prev.width - width) < 0.5 &&
+        Math.abs(prev.left - left) < 0.5
+      ) {
+        return prev;
+      }
+      return { visible: true, width, left };
+    });
+  }, [stageSizes.sw]);
+
+  useLayoutEffect(() => {
+    updateSignLayout();
+    const areaEl = bullAreaRef.current;
+    const bullEl = standingBullRef.current;
+    if (!areaEl || !bullEl) return;
+
+    const ro = new ResizeObserver(() => {
+      updateSignLayout();
+    });
+    ro.observe(areaEl);
+    ro.observe(bullEl);
+    return () => ro.disconnect();
+  }, [updateSignLayout, isBroken]);
 
   // Screen shake helper (under 300ms, no flashes)
   const triggerShake = useCallback((intensity = 8) => {
@@ -366,7 +520,7 @@ export const Charge = () => {
         y: 0,
         duration: 0.22,
         ease: 'elastic.out(1.15, 0.22)',
-        clearProps: 'x,y',
+        clearProps: 'transform',
       }
     );
   }, [reducedMotion]);
@@ -512,6 +666,189 @@ export const Charge = () => {
     }
   }, []);
 
+  const hideWallScene = useCallback(() => {
+    isWallSceneRevealedRef.current = false;
+    if (wallSceneGroupRef.current) {
+      wallSceneGroupRef.current.style.visibility = 'hidden';
+      wallSceneGroupRef.current.style.opacity = '0';
+    }
+    if (groundStripRef.current) {
+      gsap.killTweensOf(groundStripRef.current);
+      gsap.set(groundStripRef.current, { yPercent: 100 });
+    }
+  }, []);
+
+  const revealWallScene = useCallback(() => {
+    if (isWallSceneRevealedRef.current) return;
+    isWallSceneRevealedRef.current = true;
+    if (wallGroupRef.current) {
+      wallGroupRef.current.style.display = 'block';
+    }
+    if (wallSceneGroupRef.current) {
+      wallSceneGroupRef.current.style.display = 'block';
+      wallSceneGroupRef.current.style.visibility = 'visible';
+      wallSceneGroupRef.current.style.opacity = '1';
+    }
+    if (groundStripRef.current) {
+      if (reducedMotion) {
+        gsap.set(groundStripRef.current, { yPercent: 0 });
+      } else {
+        gsap.fromTo(
+          groundStripRef.current,
+          { yPercent: 100 },
+          { yPercent: 0, duration: 0.3, ease: 'power2.out' }
+        );
+      }
+    }
+  }, [reducedMotion]);
+
+  const resetCards = useCallback(() => {
+    tossCountRef.current = 0;
+    newsPagesRef.current.forEach((el) => {
+      if (el) {
+        gsap.killTweensOf(el);
+        gsap.set(el, { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1, visibility: 'visible' });
+      }
+    });
+    stampsRef.current.forEach((stamp) => {
+      if (stamp) {
+        gsap.killTweensOf(stamp);
+        gsap.set(stamp, { opacity: 1, scale: 1, rotation: -8 });
+      }
+    });
+    cardWrappersRef.current.forEach((wrap, idx) => {
+      if (wrap) {
+        gsap.killTweensOf(wrap);
+        gsap.set(wrap, {
+          rotation: CARD_ROTATIONS[idx] ?? 0,
+          y: CARD_Y_OFFSETS[idx] ?? 0,
+        });
+      }
+    });
+    setTopIdx(3);
+    setHasTossed(false);
+    hideWallScene();
+  }, [hideWallScene]);
+
+  const handleToss = useCallback(
+    (idx) => {
+      if (idx !== topIdx) return;
+      if (!peekReady || shownRef.current >= 0.02 || isBrokenRef.current) return;
+      if (isAnimatingRamRef.current) return;
+
+      // The last paper (the bottom one, index 0) cannot be tossed: it does a small wiggle
+      if (idx === 0) {
+        if (reducedMotion) return;
+        const el = newsPagesRef.current[0];
+        if (el) {
+          gsap.killTweensOf(el);
+          gsap.fromTo(
+            el,
+            { rotation: 0 },
+            {
+              keyframes: [
+                { rotation: 1.5, duration: 0.05 },
+                { rotation: -1.5, duration: 0.05 },
+                { rotation: 1.5, duration: 0.05 },
+                { rotation: -1.5, duration: 0.05 },
+                { rotation: 1.5, duration: 0.05 },
+                { rotation: 0, duration: 0.05 },
+              ],
+              ease: 'power1.inOut',
+            }
+          );
+        }
+        return;
+      }
+
+      setHasTossed(true);
+      const cardEl = newsPagesRef.current[idx];
+      if (!cardEl) return;
+
+      tossCountRef.current += 1;
+      const tossNum = tossCountRef.current;
+      const nextIdx = idx - 1;
+      setTopIdx(nextIdx);
+
+      // Determine toss fling trajectory and pan based on toss number (1: right, 2: left, 3+: up)
+      // Add up to 8% random variation
+      const rnd = () => 1 + (Math.random() * 2 - 1) * 0.08;
+      let targetX = 0;
+      let targetY = 0;
+      let targetRot = 0;
+      let pan = 0;
+
+      if (tossNum === 1) {
+        // Toss 1 flings right
+        targetX = 0.95 * window.innerWidth * rnd();
+        targetY = -0.12 * window.innerHeight * rnd();
+        targetRot = 26 * rnd();
+        pan = 0.7;
+      } else if (tossNum === 2) {
+        // Toss 2 flings left
+        targetX = -0.95 * window.innerWidth * rnd();
+        targetY = -0.08 * window.innerHeight * rnd();
+        targetRot = -30 * rnd();
+        pan = -0.7;
+      } else {
+        // Toss 3 flings up
+        targetX = 0.3 * window.innerWidth * rnd();
+        targetY = -0.95 * window.innerHeight * rnd();
+        targetRot = 16 * rnd();
+        pan = 0;
+      }
+
+      // Play directional paper flick sound
+      playPaperFlick(pan);
+
+      if (reducedMotion) {
+        gsap.set(cardEl, { visibility: 'hidden' });
+        return;
+      }
+
+      // Small bump on the new top paper (scale 1.015 to 1, 200ms)
+      const nextCard = newsPagesRef.current[nextIdx];
+      if (nextCard) {
+        gsap.fromTo(
+          nextCard,
+          { scale: 1.015 },
+          { scale: 1, duration: 0.2, ease: 'power1.out' }
+        );
+      }
+
+      // Fling animation (GSAP) on the inner .news-card-item element
+      gsap.to(cardEl, {
+        x: targetX,
+        y: targetY,
+        rotation: targetRot,
+        duration: 0.5,
+        ease: 'power2.in',
+        onComplete: () => {
+          gsap.set(cardEl, { visibility: 'hidden' });
+        },
+      });
+
+      // The peek bull does one quick sideways glance (translateX 3px) after each toss
+      if (peekBullRef.current) {
+        gsap.fromTo(
+          peekBullRef.current,
+          { x: 0 },
+          {
+            x: 3,
+            duration: 0.12,
+            yoyo: true,
+            repeat: 1,
+            ease: 'power1.inOut',
+            onComplete: () => {
+              gsap.set(peekBullRef.current, { x: 0 });
+            },
+          }
+        );
+      }
+    },
+    [topIdx, peekReady, reducedMotion]
+  );
+
   useEffect(() => {
     if (reducedMotion || !containerRef.current) return;
 
@@ -546,15 +883,77 @@ export const Charge = () => {
     };
   }, [reducedMotion, runTimeBasedIntro]);
 
+  // Torn paper edge entrance when Charge section is 15% visible
+  useEffect(() => {
+    if (!tornEdgeRef.current || !containerRef.current) return;
+
+    if (reducedMotion) {
+      gsap.set(tornEdgeRef.current, { y: 0, x: 0, opacity: 1 });
+      return;
+    }
+
+    // Set initial position: 24px up
+    gsap.set(tornEdgeRef.current, { y: TORN_EDGE_ENTRANCE_OFFSET, x: 0 });
+
+    const triggerDrop = () => {
+      if (hasTornEdgeDroppedRef.current || !tornEdgeRef.current) return;
+      hasTornEdgeDroppedRef.current = true;
+
+      const tl = gsap.timeline();
+      tl.to(tornEdgeRef.current, {
+        y: 0,
+        duration: TORN_EDGE_ENTRANCE_DURATION,
+        ease: 'back.out(1.7)',
+        onComplete: () => {
+          gsap.to(tornEdgeRef.current, {
+            x: TORN_EDGE_SHAKE_PX,
+            duration: 0.035,
+            yoyo: true,
+            repeat: 3,
+            onComplete: () => {
+              gsap.set(tornEdgeRef.current, { x: 0 });
+            },
+          });
+        },
+      });
+    };
+
+    // 2-second fallback safety: ensure visible even if trigger fails
+    const fallbackTimer = window.setTimeout(() => {
+      if (!hasTornEdgeDroppedRef.current && tornEdgeRef.current) {
+        hasTornEdgeDroppedRef.current = true;
+        gsap.set(tornEdgeRef.current, { y: 0, x: 0, opacity: 1 });
+      }
+    }, 2000);
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.intersectionRatio >= TORN_EDGE_THRESHOLD || entry.isIntersecting) {
+            triggerDrop();
+            observer.disconnect();
+          }
+        });
+      },
+      { threshold: [TORN_EDGE_THRESHOLD] }
+    );
+
+    observer.observe(containerRef.current);
+
+    return () => {
+      window.clearTimeout(fallbackTimer);
+      observer.disconnect();
+    };
+  }, [reducedMotion]);
+
   // Bull-peek idling every 4 to 6 seconds
   useEffect(() => {
-    if (!peekReady || shownRef.current > 0.05 || !peekBullRef.current) return;
+    if (!peekReady || shownRef.current > 0.05 || isBrokenRef.current || !peekBullRef.current) return;
 
-    let timeoutId;
     const triggerIdle = () => {
       const delay = 4000 + Math.random() * 2000;
-      timeoutId = setTimeout(() => {
-        if (!peekBullRef.current || shownRef.current > 0.05) return;
+      peekIdleTimeoutRef.current = setTimeout(() => {
+        if (!peekBullRef.current || shownRef.current > 0.05 || isBrokenRef.current) return;
         const choice = Math.floor(Math.random() * 3);
         const el = peekBullRef.current;
         if (choice === 0) {
@@ -576,14 +975,104 @@ export const Charge = () => {
     };
 
     triggerIdle();
-    return () => clearTimeout(timeoutId);
+    return () => {
+      if (peekIdleTimeoutRef.current) {
+        clearTimeout(peekIdleTimeoutRef.current);
+        peekIdleTimeoutRef.current = null;
+      }
+    };
   }, [peekReady]);
+
+  // -----------------------------------------------------------------------
+  // 5b. DESKTOP PINNED SCROLL LOCK DURING RAM / BREACH ANIMATIONS
+  // -----------------------------------------------------------------------
+  const unlockScroll = useCallback(() => {
+    if (scrollLockCleanupRef.current) {
+      scrollLockCleanupRef.current();
+      scrollLockCleanupRef.current = null;
+    }
+  }, []);
+
+  const lockScroll = useCallback(() => {
+    if (scrollLockCleanupRef.current) return;
+    if (typeof window === 'undefined') return;
+    if (reducedMotionRef.current || window.innerWidth < 768) return;
+    const st = desktopStRef.current;
+    if (!scrollDrivenRef.current || !st) return;
+
+    const curY = window.scrollY;
+    const isPinned = st.isActive || (curY >= st.start - 2 && curY <= st.end + 2);
+    if (!isPinned && !(curY > st.end && targetRef.current >= 0.62)) return;
+
+    const lockY = Math.max(st.start, Math.min(curY, st.end));
+    if (Math.abs(window.scrollY - lockY) > 1) {
+      window.scrollTo(0, lockY);
+    }
+
+    const blockedKeys = new Set([
+      'Space',
+      ' ',
+      'PageDown',
+      'PageUp',
+      'ArrowDown',
+      'ArrowUp',
+      'End',
+      'Home',
+    ]);
+
+    const onWheel = (e) => {
+      if (isAnimatingRamRef.current) {
+        e.preventDefault();
+      }
+    };
+
+    const onKeyDown = (e) => {
+      if (!isAnimatingRamRef.current) return;
+      const tag = e.target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable) return;
+      if (blockedKeys.has(e.code) || blockedKeys.has(e.key)) {
+        e.preventDefault();
+      }
+    };
+
+    const onScroll = () => {
+      if (isAnimatingRamRef.current && Math.abs(window.scrollY - lockY) > 0.5) {
+        window.scrollTo(0, lockY);
+      }
+    };
+
+    window.addEventListener('wheel', onWheel, { passive: false });
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('scroll', onScroll, { passive: true });
+
+    scrollLockCleanupRef.current = () => {
+      window.removeEventListener('wheel', onWheel, { passive: false });
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('scroll', onScroll);
+    };
+  }, []);
 
   // -----------------------------------------------------------------------
   // 6. THE RAM ANIMATION (Damage Levels 1, 2, 3) (~1.3s total)
   // -----------------------------------------------------------------------
   const executeRam = useCallback(
     (ramIdx) => {
+      isAnimatingRamRef.current = true;
+      lockScroll();
+      revealWallScene();
+      if (groundStripRef.current) gsap.set(groundStripRef.current, { yPercent: 0 });
+      if (wallGroupRef.current) {
+        wallGroupRef.current.style.transform = 'translateY(0%)';
+        wallGroupRef.current.style.opacity = '1';
+      }
+      if (signContainerRef.current) {
+        signContainerRef.current.style.transform = 'translateY(0%)';
+        signContainerRef.current.style.opacity = '1';
+      }
+      if (bullContainerRef.current) {
+        bullContainerRef.current.style.transform = 'translateX(0px)';
+        bullContainerRef.current.style.opacity = '1';
+      }
       setIdleMode('none');
       const bull = bullSpriteRef.current;
       const shadow = bullShadowRef.current;
@@ -600,7 +1089,9 @@ export const Charge = () => {
       const tl = gsap.timeline({
         onComplete: () => {
           isAnimatingRamRef.current = false;
+          unlockScroll();
           setIdleMode(isHoldingRef.current ? 'pawing' : 'idle');
+          scheduleTickRef.current();
         },
       });
 
@@ -797,16 +1288,18 @@ export const Charge = () => {
         0.75
       );
     },
-    [stageSizes, triggerShake, triggerDust]
+    [stageSizes, triggerShake, triggerDust, revealWallScene, lockScroll, unlockScroll]
   );
 
   // -----------------------------------------------------------------------
   // 7. BREACH ANIMATION (Target = 1.0)
   // -----------------------------------------------------------------------
   const executeBreach = useCallback(() => {
+    revealWallScene();
+    if (groundStripRef.current) gsap.set(groundStripRef.current, { yPercent: 0 });
     isAnimatingRamRef.current = true;
     isBrokenRef.current = true;
-    setIsBroken(true);
+    lockScroll();
     setIdleMode('none');
 
     const bull = bullSpriteRef.current;
@@ -817,6 +1310,7 @@ export const Charge = () => {
     const tl = gsap.timeline();
 
     // Dash through the wall
+    playSample('grunt');
     tl.to(
       bull,
       {
@@ -866,15 +1360,42 @@ export const Charge = () => {
       tl.to(topCapRef.current, { x: 260, y: 160, rotation: -90, opacity: 0, duration: 0.75, ease: 'power3.out' }, 0.28);
     }
 
-    // Sign falls, bounces twice, lies at -15deg
+    // Compute sign resting position so it lands directly on ground line, never clipped
+    const rotDeg = 15;
+    const rotRad = (rotDeg * Math.PI) / 180;
+    const plateW = 537.5;
+    const plateH = 182.75;
+    const rotHalfH = (plateW / 2) * Math.sin(rotRad) + (plateH / 2) * Math.cos(rotRad); // ~157.8 viewBox units
+    const rotHalfW = (plateW / 2) * Math.cos(rotRad) + (plateH / 2) * Math.sin(rotRad); // ~283.2 viewBox units
+
+    // ViewBox ground line is at y = 660. The lowest point of the plate touches ground line.
+    const targetCenterY = 660 - rotHalfH;
+    const origCenterY = 84 - stageSizes.postHeightViewBox - plateH / 2;
+    const endSignY = targetCenterY - origCenterY;
+
+    // Center X in stage screen pixels: ensure sign is fully inside the stage [margin, sw - margin]
+    const margin = Math.max(16, sw * 0.04);
+    const signScreenHalfW = rotHalfW * stageSizes.wallScale;
+    const minCenterScreenX = margin + signScreenHalfW;
+    const maxCenterScreenX = sw - margin - signScreenHalfW;
+    const defaultCenterScreenX = stageSizes.wallSvgLeft + (345 + 40) * stageSizes.wallScale;
+    let clampedCenterScreenX = defaultCenterScreenX;
+    if (maxCenterScreenX >= minCenterScreenX) {
+      clampedCenterScreenX = Math.max(minCenterScreenX, Math.min(maxCenterScreenX, defaultCenterScreenX));
+    } else {
+      clampedCenterScreenX = sw / 2;
+    }
+    const endSignX = (clampedCenterScreenX - stageSizes.wallSvgLeft) / stageSizes.wallScale - 345;
+
+    // Sign falls, bounces twice, lies at -15deg on ground line inside stage
     if (signGroup) {
       tl.to(
         signGroup,
         {
           keyframes: [
-            { y: 380, x: 60, rotation: -25, duration: 0.45, ease: 'power2.in' },
-            { y: 350, x: 80, rotation: -10, duration: 0.15, ease: 'power1.out' },
-            { y: 380, x: 90, rotation: -15, duration: 0.18, ease: 'bounce.out' },
+            { y: endSignY - 40, x: endSignX - 30, rotation: -25, duration: 0.45, ease: 'power2.in' },
+            { y: endSignY - 25, x: endSignX - 10, rotation: -10, duration: 0.15, ease: 'power1.out' },
+            { y: endSignY, x: endSignX, rotation: -15, duration: 0.18, ease: 'bounce.out' },
           ],
         },
         0.28
@@ -891,6 +1412,37 @@ export const Charge = () => {
       '+=0.5'
     );
 
+    // Hide all wall leftovers when closing scene starts: cracks, struck bricks, post, loose bricks, rubble
+    tl.add(() => {
+      setIsBroken(true);
+      setDisplayedHeadline(CHARGE_COPY.beat4.heading);
+      headlineTargetRef.current = CHARGE_COPY.beat4.heading;
+      if (wallGroupRef.current) {
+        wallGroupRef.current.style.opacity = '0';
+      }
+      if (signContainerRef.current) {
+        signContainerRef.current.style.opacity = '0';
+      }
+      if (postGroupRef.current) {
+        const postParts = postGroupRef.current.querySelectorAll(':scope > rect, :scope > circle');
+        postParts.forEach((p) => {
+          p.style.opacity = '0';
+        });
+      }
+      cracksRef.current.forEach((c) => {
+        if (c) c.style.opacity = '0';
+      });
+      if (struckBrick1Ref.current) struckBrick1Ref.current.style.opacity = '0';
+      if (struckBrick2Ref.current) struckBrick2Ref.current.style.opacity = '0';
+      if (sideSlabRef.current) sideSlabRef.current.style.opacity = '0';
+      if (topCapRef.current) topCapRef.current.style.opacity = '0';
+      ALL_FRONT_BRICKS.forEach((_, idx) => {
+        const el = frontBrickRefs.current[idx];
+        if (el) el.style.opacity = '0';
+      });
+      setDustPuffs([]);
+    }, '+=0.05');
+
     // Closing scene takeover: background newsprint to ink black
     tl.to(
       containerRef.current,
@@ -899,7 +1451,7 @@ export const Charge = () => {
         duration: 0.6,
         ease: 'power2.inOut',
       },
-      '+=0.1'
+      '+=0.05'
     );
 
     // Bull-standing rises in
@@ -925,55 +1477,269 @@ export const Charge = () => {
       '+=0.05'
     );
 
-    tl.to(
-      scrollArrowRef.current,
-      {
-        opacity: 0.85,
-        duration: 0.25,
-      },
-      '+=0.05'
-    );
-
     tl.add(() => {
       isAnimatingRamRef.current = false;
+      unlockScroll();
+
+      // Kill every repeating tween and timer for the bull idle, paw scrape, peek idle, dust, speed lines
+      if (peekIdleTimeoutRef.current) {
+        clearTimeout(peekIdleTimeoutRef.current);
+        peekIdleTimeoutRef.current = null;
+      }
+      setIdleMode('none');
+      if (idleAnimRef.current) {
+        idleAnimRef.current.kill();
+        idleAnimRef.current = null;
+      }
+      if (bullSpriteRef.current) {
+        gsap.killTweensOf(bullSpriteRef.current);
+      }
+      if (peekBullRef.current) {
+        gsap.killTweensOf(peekBullRef.current);
+      }
+      if (speedLinesRef.current) {
+        gsap.killTweensOf(speedLinesRef.current);
+        speedLinesRef.current.style.opacity = '0';
+      }
+      if (starburstRef.current) {
+        gsap.killTweensOf(starburstRef.current);
+        starburstRef.current.style.opacity = '0';
+      }
+      setDustPuffs([]);
+
+      // Set stage and wall group transforms back to none (clearProps: 'transform') after any shake
+      if (stageRef.current) {
+        gsap.set(stageRef.current, { clearProps: 'transform' });
+      }
+      if (rumbleRef.current) {
+        gsap.set(rumbleRef.current, { clearProps: 'transform' });
+      }
+      if (wallGroupRef.current) {
+        gsap.set(wallGroupRef.current, { clearProps: 'transform' });
+        wallGroupRef.current.style.display = 'none';
+      }
+      if (wallSceneGroupRef.current) {
+        gsap.set(wallSceneGroupRef.current, { clearProps: 'transform' });
+        wallSceneGroupRef.current.style.display = 'none';
+      }
+
+      // Remove will-change from animated props after breach settles (preserve GPU fill bar)
+      if (containerRef.current) {
+        const els = containerRef.current.querySelectorAll('*');
+        els.forEach((el) => {
+          if (el === progressBarFillRef.current) return;
+          if (el.style && el.style.willChange) {
+            el.style.willChange = 'auto';
+          }
+        });
+      }
+
+      // Desktop only: release pin & 350% pinSpacing once breach closing scene settles
+      if (!reducedMotionRef.current && window.innerWidth >= 768 && desktopStRef.current && scrollDrivenRef.current) {
+        const st = desktopStRef.current;
+        const start = st.start;
+        scrollDrivenRef.current = false;
+        st.disable(true);
+        window.scrollTo(0, start);
+        ScrollTrigger.refresh();
+        window.dispatchEvent(new Event('resize'));
+      }
+
+      scheduleTickRef.current();
     });
-  }, [stageSizes, triggerShake, triggerDust]);
+  }, [stageSizes, triggerShake, triggerDust, revealWallScene, setIdleMode, unlockScroll]);
 
   // -----------------------------------------------------------------------
-  // 8. RUN IT BACK (Rebuild in 800ms)
+  // 8. RESTORE INTRO STATE & RUN IT BACK
   // -----------------------------------------------------------------------
+  const restoreIntroState = useCallback(() => {
+    isBrokenRef.current = false;
+    setIsBroken(false);
+    targetRef.current = 0;
+    shownRef.current = 0;
+    damageLevelRef.current = 0;
+    lastThresholdReachedRef.current = 0;
+    isHoldingRef.current = false;
+    hasTriggeredWallDustRef.current = false;
+
+    // Restore wall display
+    if (wallGroupRef.current) {
+      wallGroupRef.current.style.display = 'block';
+    }
+    if (wallSceneGroupRef.current) {
+      wallSceneGroupRef.current.style.display = 'block';
+    }
+
+    // 1. Make the cards container visible (display block, opacity 1, translate 0)
+    if (cardsContainerRef.current) {
+      cardsContainerRef.current.style.display = 'block';
+      cardsContainerRef.current.style.transform = 'translateY(0px)';
+      cardsContainerRef.current.style.opacity = '1';
+    }
+
+    // 2. Restore all 4 newspapers to initial pile with stamps stamped; reset toss state
+    resetCards();
+
+    // 3. Set headline back to the first headline
+    setDisplayedHeadline(CHARGE_COPY.beat1.heading);
+    headlineTargetRef.current = CHARGE_COPY.beat1.heading;
+
+    // 4. Hide the wall scene group and set ground strip to translateY(100%)
+    hideWallScene();
+
+    // 5. Set section background back to newsprint (#E8DFC9)
+    if (containerRef.current) {
+      gsap.set(containerRef.current, { backgroundColor: '#E8DFC9' });
+    }
+
+    // 6. Ensure peek bull is mounted on bottom paper and visible (opacity 1, yPercent 0)
+    if (peekBullRef.current) {
+      gsap.killTweensOf(peekBullRef.current);
+      gsap.set(peekBullRef.current, { opacity: 1, yPercent: 0, x: 0 });
+    }
+
+    // 7. Reset HOLD TO CHARGE button and progress bar back to 0%
+    activePointerIdRef.current = null;
+    if (progressBarFillRef.current) {
+      progressBarFillRef.current.style.willChange = 'transform';
+      progressBarFillRef.current.style.transform = 'scaleX(0)';
+    }
+    if (buttonTextRef.current) {
+      buttonTextRef.current.textContent = CHARGE_COPY.mobileButton.holdText;
+    }
+
+    // 8. Hide standing bull and speech bubble
+    if (standingBullRef.current) {
+      gsap.killTweensOf(standingBullRef.current);
+      gsap.set(standingBullRef.current, { y: 120, opacity: 0 });
+    }
+    if (speechBubbleRef.current) {
+      gsap.killTweensOf(speechBubbleRef.current);
+      gsap.set(speechBubbleRef.current, { opacity: 0, scale: 0.7 });
+    }
+  }, [resetCards, hideWallScene]);
+
   const handleRunItBack = useCallback(() => {
     if (isAnimatingRamRef.current) return;
     isAnimatingRamRef.current = true;
+    unlockScroll();
     setIdleMode('none');
+
+    // Desktop: re-enable pin & jump scroll position back to start of pin instantly (behavior: 'auto')
+    if (!reducedMotionRef.current && window.innerWidth >= 768 && desktopStRef.current) {
+      const st = desktopStRef.current;
+      scrollDrivenRef.current = true;
+      st.enable();
+      ScrollTrigger.refresh();
+      const startY = st.start || 0;
+      window.scrollTo({
+        top: startY,
+        behavior: 'auto',
+      });
+      try {
+        st.scroll(startY);
+        ScrollTrigger.update();
+      } catch (_) {}
+      window.dispatchEvent(new Event('resize'));
+    }
+
+    // Kill any running tweens or timeouts before starting
+    isHoldingRef.current = false;
+    targetRef.current = 0;
+    shownRef.current = 0;
+    damageLevelRef.current = 0;
+    lastThresholdReachedRef.current = 0;
+
+    gsap.killTweensOf([
+      bullSpriteRef.current,
+      wallSvgRef.current,
+      signPlateGroupRef.current,
+      postGroupRef.current,
+      standingBullRef.current,
+      speechBubbleRef.current,
+      containerRef.current,
+      sideSlabRef.current,
+      struckBrick1Ref.current,
+      struckBrick2Ref.current,
+      topCapRef.current,
+      leftBoltRef.current,
+      ...frontBrickRefs.current.filter(Boolean),
+      ...cracksRef.current.filter(Boolean),
+      ...newsPagesRef.current.filter(Boolean),
+      peekBullRef.current,
+    ]);
 
     const tl = gsap.timeline({
       onComplete: () => {
-        isBrokenRef.current = false;
-        setIsBroken(false);
-        targetRef.current = 0;
-        shownRef.current = 0;
-        damageLevelRef.current = 0;
-        lastThresholdReachedRef.current = 0;
-        isAnimatingRamRef.current = false;
-        setPeekReady(true);
-        hasTriggeredWallDustRef.current = false;
+        restoreIntroState();
 
-        // Reset progress bar & button text directly
-        if (progressBarFillRef.current) progressBarFillRef.current.style.width = '0%';
-        if (buttonTextRef.current) buttonTextRef.current.textContent = `⚡ ${CHARGE_COPY.mobileButton.holdText}`;
+        if (reducedMotion) {
+          isAnimatingRamRef.current = false;
+          setPeekReady(true);
+          scheduleTickRef.current();
+          return;
+        }
 
-        // Desktop: smooth-scroll to start of pinned section
-        if (desktopStRef.current) {
-          window.scrollTo({
-            top: desktopStRef.current.start || 0,
-            behavior: 'smooth',
-          });
+        const pages = newsPagesRef.current.filter(Boolean);
+        const peek = peekBullRef.current;
+
+        const introTl = gsap.timeline({
+          onComplete: () => {
+            targetRef.current = 0;
+            shownRef.current = 0;
+            damageLevelRef.current = 0;
+            lastThresholdReachedRef.current = 0;
+            isHoldingRef.current = false;
+            isAnimatingRamRef.current = false;
+            setPeekReady(true);
+            scheduleTickRef.current();
+          },
+        });
+
+        // The four papers drop back onto the pile one after another (translateY: -30 to 0, opacity 0 to 1, 80ms stagger, 300ms each)
+        introTl.fromTo(
+          pages,
+          { y: -30, opacity: 0 },
+          {
+            y: 0,
+            opacity: 1,
+            duration: 0.3,
+            stagger: 0.08,
+            ease: 'power2.out',
+          }
+        );
+
+        // Then the peek bull rises (yPercent: 100 to 0)
+        if (peek) {
+          introTl.fromTo(
+            peek,
+            { yPercent: 100, opacity: 0 },
+            {
+              yPercent: 0,
+              opacity: 1,
+              duration: 0.35,
+              ease: 'power2.out',
+            }
+          );
         }
       },
     });
 
-    // Rebuild bricks
+    // Rebuild bricks in 800ms
+    if (wallSceneGroupRef.current) {
+      wallSceneGroupRef.current.style.display = 'block';
+    }
+    if (wallGroupRef.current) {
+      wallGroupRef.current.style.display = 'block';
+      wallGroupRef.current.style.opacity = '1';
+    }
+    if (postGroupRef.current) {
+      const postParts = postGroupRef.current.querySelectorAll(':scope > rect, :scope > circle');
+      postParts.forEach((p) => {
+        p.style.opacity = '1';
+      });
+    }
+
     ALL_FRONT_BRICKS.forEach((_, idx) => {
       const el = frontBrickRefs.current[idx];
       if (!el) return;
@@ -1000,23 +1766,45 @@ export const Charge = () => {
     if (standingBullRef.current) {
       tl.to(standingBullRef.current, { y: 120, opacity: 0, duration: 0.4 }, 0);
     }
+    if (speechBubbleRef.current) {
+      tl.to(speechBubbleRef.current, { opacity: 0, scale: 0.7, duration: 0.3 }, 0);
+    }
 
     // Reset background to newsprint
     if (containerRef.current) {
       tl.to(containerRef.current, { backgroundColor: '#E8DFC9', duration: 0.6 }, 0);
     }
-  }, []);
+  }, [restoreIntroState, reducedMotion, unlockScroll]);
 
   // -----------------------------------------------------------------------
   // DEBUG HELPERS & RESET
   // -----------------------------------------------------------------------
   const instantReset = useCallback(() => {
+    unlockScroll();
+    if (!reducedMotionRef.current && window.innerWidth >= 768 && desktopStRef.current) {
+      const st = desktopStRef.current;
+      scrollDrivenRef.current = true;
+      st.enable();
+      ScrollTrigger.refresh();
+      const startY = st.start || 0;
+      window.scrollTo({
+        top: startY,
+        behavior: 'auto',
+      });
+      try {
+        st.scroll(startY);
+        ScrollTrigger.update();
+      } catch (_) {}
+      window.dispatchEvent(new Event('resize'));
+    }
+
     gsap.killTweensOf([
       bullSpriteRef.current,
       wallSvgRef.current,
       signPlateGroupRef.current,
       postGroupRef.current,
       standingBullRef.current,
+      speechBubbleRef.current,
       containerRef.current,
     ]);
     cracksRef.current.forEach((c) => {
@@ -1037,30 +1825,15 @@ export const Charge = () => {
     if (struckBrick2Ref.current) gsap.set(struckBrick2Ref.current, { x: 0, y: 0, rotation: 0, opacity: 1 });
     if (topCapRef.current) gsap.set(topCapRef.current, { x: 0, y: 0, rotation: 0, opacity: 1 });
     if (signPlateGroupRef.current) gsap.set(signPlateGroupRef.current, { x: 0, y: 0, rotation: 0 });
-    if (postGroupRef.current) gsap.set(postGroupRef.current, { rotation: 0 });
+    if (postGroupRef.current) {
+      gsap.set(postGroupRef.current, { rotation: 0 });
+      const postParts = postGroupRef.current.querySelectorAll(':scope > rect, :scope > circle');
+      postParts.forEach((p) => {
+        p.style.opacity = '1';
+      });
+    }
     if (leftBoltRef.current) gsap.set(leftBoltRef.current, { x: 0, y: 0, rotation: 0, opacity: 1 });
     if (bullSpriteRef.current) gsap.set(bullSpriteRef.current, { x: 0, y: 0, rotation: 0, opacity: 1, scaleX: 1, scaleY: 1 });
-    if (standingBullRef.current) gsap.set(standingBullRef.current, { y: 120, opacity: 0 });
-    if (containerRef.current) gsap.set(containerRef.current, { backgroundColor: '#E8DFC9' });
-
-    isBrokenRef.current = false;
-    setIsBroken(false);
-    targetRef.current = 0;
-    shownRef.current = 0;
-    damageLevelRef.current = 0;
-    lastThresholdReachedRef.current = 0;
-    isAnimatingRamRef.current = false;
-    isHoldingRef.current = false;
-    hasTriggeredWallDustRef.current = false;
-    setPeekReady(true);
-
-    if (progressBarFillRef.current) progressBarFillRef.current.style.width = '0%';
-    if (buttonTextRef.current) buttonTextRef.current.textContent = `⚡ ${CHARGE_COPY.mobileButton.holdText}`;
-    if (cardsContainerRef.current) {
-      cardsContainerRef.current.style.display = 'block';
-      cardsContainerRef.current.style.transform = 'translateY(0px)';
-      cardsContainerRef.current.style.opacity = '1';
-    }
     if (wallGroupRef.current) {
       wallGroupRef.current.style.transform = 'translateY(105%)';
       wallGroupRef.current.style.opacity = '0';
@@ -1073,14 +1846,17 @@ export const Charge = () => {
       bullContainerRef.current.style.transform = 'translateX(-340px)';
       bullContainerRef.current.style.opacity = '0';
     }
-    setDisplayedHeadline(CHARGE_COPY.beat1.heading);
-    headlineTargetRef.current = CHARGE_COPY.beat1.heading;
-  }, []);
+
+    restoreIntroState();
+    isAnimatingRamRef.current = false;
+    setPeekReady(true);
+    scheduleTickRef.current();
+  }, [restoreIntroState, unlockScroll]);
 
   const getStateName = useCallback(() => {
     if (isBrokenRef.current && !isAnimatingRamRef.current) return 'closing';
     if (isAnimatingRamRef.current) {
-      if (shownRef.current >= 0.98 || targetRef.current >= 1.0) return 'breach';
+      if (isBrokenRef.current || shownRef.current >= 0.98) return 'breach';
       if (damageLevelRef.current === 3) return 'ram3';
       if (damageLevelRef.current === 2) return 'ram2';
       return 'ram1';
@@ -1093,7 +1869,24 @@ export const Charge = () => {
   const handleDebugJump = useCallback((stateKey) => {
     if (stateKey === 'intro') {
       instantReset();
-    } else if (stateKey === 'ram1') {
+      resetCards();
+      hideWallScene();
+      return;
+    }
+    if (stateKey === 'reset') {
+      instantReset();
+      hideWallScene();
+      return;
+    }
+    if (stateKey === 'run_it_back') {
+      handleRunItBack();
+      return;
+    }
+
+    revealWallScene();
+    if (groundStripRef.current) gsap.set(groundStripRef.current, { yPercent: 0 });
+
+    if (stateKey === 'ram1') {
       gsap.killTweensOf([
         bullSpriteRef.current,
         wallSvgRef.current,
@@ -1302,14 +2095,16 @@ export const Charge = () => {
       damageLevelRef.current = 3;
       lastThresholdReachedRef.current = 1.0;
       executeBreach();
-    } else if (stateKey === 'run_it_back') {
-      handleRunItBack();
-    } else if (stateKey === 'reset') {
-      instantReset();
     }
-  }, [executeRam, executeBreach, handleRunItBack, instantReset]);
+    if (isDesktopViewport()) scheduleTickRef.current();
+  }, [executeRam, executeBreach, handleRunItBack, instantReset, resetCards, hideWallScene, revealWallScene]);
 
   const handleDebugSlider = useCallback((val) => {
+    if (val > 0.02) {
+      revealWallScene();
+    } else if (val <= 0.01 && !isBrokenRef.current) {
+      hideWallScene();
+    }
     if (isBrokenRef.current && val < 1.0) {
       isBrokenRef.current = false;
       setIsBroken(false);
@@ -1322,7 +2117,8 @@ export const Charge = () => {
       if (bullSpriteRef.current) gsap.set(bullSpriteRef.current, { x: 0, y: 0, rotation: 0, opacity: 1, scaleX: 1, scaleY: 1 });
     }
     targetRef.current = val;
-  }, []);
+    if (isDesktopViewport()) scheduleTickRef.current();
+  }, [revealWallScene, hideWallScene]);
 
   const toggleSlowMo = useCallback(() => {
     setIsSlowMo((prev) => {
@@ -1346,21 +2142,48 @@ export const Charge = () => {
   // 1. ENGINE ANIMATION FRAME LOOP (Decoupled Target vs Shown, Zero React State)
   // -----------------------------------------------------------------------
   useEffect(() => {
+    const isDesktop = isDesktopViewport();
     let lastTime = performance.now();
-    let animId;
+    let animId = 0;
+    let rafScheduled = false;
+    let isDisposed = false;
+
+    const scheduleTick = () => {
+      if (isDisposed || rafScheduled) return;
+      if (isDesktop && document.hidden) return;
+      lastTime = performance.now();
+      rafScheduled = true;
+      animId = requestAnimationFrame(tick);
+    };
+
+    if (isDesktop) {
+      scheduleTickRef.current = scheduleTick;
+    } else {
+      scheduleTickRef.current = () => {};
+    }
 
     const tick = (now) => {
-      const dt = Math.min(0.1, (now - lastTime) / 1000);
+      rafScheduled = false;
+      const prevTime = lastTime;
       lastTime = now;
+      const dt = Math.min(0.1, Math.max(0, (now - prevTime) / 1000));
 
-      // Mobile hold progression
+      // Hold progression: mobile drains on release; desktop Hold adds dt / HOLD_SECONDS with no drain
       if (!isBrokenRef.current) {
-        if (isHoldingRef.current) {
-          targetRef.current = Math.min(1, targetRef.current + dt / HOLD_SECONDS);
-        } else {
-          // Release: drain slowly (0.12/s), but never below last ram threshold reached
-          const minT = lastThresholdReachedRef.current;
-          targetRef.current = Math.max(minT, targetRef.current - 0.12 * dt);
+        if (!scrollDrivenRef.current) {
+          if (isHoldingRef.current) {
+            const effectiveStart = Math.max(prevTime, holdStartTimeRef.current);
+            const holdDt = Math.min(0.1, Math.max(0, (now - effectiveStart) / 1000));
+            targetRef.current = Math.min(1, targetRef.current + holdDt / HOLD_SECONDS);
+          } else {
+            // Release: drain slowly (0.12/s), but never below last ram threshold reached
+            const minT = lastThresholdReachedRef.current;
+            targetRef.current = Math.max(minT, targetRef.current - 0.12 * dt);
+          }
+        } else if (isHoldingRef.current) {
+          const effectiveStart = Math.max(prevTime, holdStartTimeRef.current);
+          const holdDt = Math.min(0.1, Math.max(0, (now - effectiveStart) / 1000));
+          targetRef.current = Math.min(1, targetRef.current + holdDt / HOLD_SECONDS);
         }
       }
 
@@ -1375,7 +2198,7 @@ export const Charge = () => {
             const ramIdx = RAM_THRESHOLDS.indexOf(nextThresh);
             damageLevelRef.current = ramIdx + 1;
             executeRam(ramIdx);
-          } else if (targetRef.current >= 1.0 && shownRef.current >= 0.90) {
+          } else if (targetRef.current >= 0.999 && shownRef.current >= 0.90) {
             shownRef.current = 1.0;
             executeBreach();
           } else {
@@ -1395,42 +2218,47 @@ export const Charge = () => {
         }
       }
 
-      // DOM Updates (Zero React Re-render!)
+      // DOM Updates (Zero React Re-render; GPU scaleX so iOS paints smoothly)
       const s = shownRef.current;
+      if (s > 0.02) {
+        revealWallScene();
+      } else if (s <= 0.01 && !isBrokenRef.current && isWallSceneRevealedRef.current && !isHoldingRef.current) {
+        hideWallScene();
+      }
       if (progressBarFillRef.current) {
-        progressBarFillRef.current.style.width = `${s * 100}%`;
+        progressBarFillRef.current.style.transform = `scaleX(${s})`;
       }
       if (buttonTextRef.current) {
         buttonTextRef.current.textContent = isHoldingRef.current
-          ? `⚡ ${CHARGE_COPY.mobileButton.chargingText} ${Math.round(s * 100)}%`
-          : `⚡ ${CHARGE_COPY.mobileButton.holdText}`;
+          ? `${CHARGE_COPY.mobileButton.chargingText} ${Math.round(s * 100)}%`
+          : CHARGE_COPY.mobileButton.holdText;
       }
 
-      // Slide away intro cards over progress (0 to 0.28)
+      // Slide away intro cards over progress (0 to 0.18)
       if (cardsContainerRef.current) {
-        if (s < 0.28 && !isBrokenRef.current) {
+        if (s < 0.18 && !isBrokenRef.current) {
           cardsContainerRef.current.style.display = 'block';
           cardsContainerRef.current.style.transform = `translateY(${-s * 480}px)`;
-          cardsContainerRef.current.style.opacity = `${Math.max(0, 1 - s / 0.20)}`;
+          cardsContainerRef.current.style.opacity = `${Math.max(0, 1 - s / 0.18)}`;
         } else {
           cardsContainerRef.current.style.display = 'none';
         }
       }
 
-      // Wall and Bull rise / enter from 0 to 0.35
+      // Wall and Bull rise / enter only after newspapers fade (0.18 to 0.35)
       if (!isBrokenRef.current) {
-        const introT = Math.min(1, Math.max(0, s / 0.35));
+        const introT = Math.min(1, Math.max(0, (s - 0.18) / (0.35 - 0.18)));
         if (wallGroupRef.current) {
           wallGroupRef.current.style.transform = `translateY(${(1 - introT) * 105}%)`;
-          wallGroupRef.current.style.opacity = introT > 0.05 ? '1' : '0';
+          wallGroupRef.current.style.opacity = s >= 0.18 ? '1' : '0';
         }
         if (signContainerRef.current) {
           signContainerRef.current.style.transform = `translateY(${(1 - introT) * 105}%)`;
-          signContainerRef.current.style.opacity = introT > 0.05 ? '1' : '0';
+          signContainerRef.current.style.opacity = s >= 0.18 ? '1' : '0';
         }
         if (bullContainerRef.current && !isAnimatingRamRef.current) {
           bullContainerRef.current.style.transform = `translateX(${(1 - introT) * -340}px)`;
-          bullContainerRef.current.style.opacity = introT > 0.05 ? '1' : '0';
+          bullContainerRef.current.style.opacity = s >= 0.18 ? '1' : '0';
         }
 
         if (introT >= 1 && !hasTriggeredWallDustRef.current) {
@@ -1464,16 +2292,65 @@ export const Charge = () => {
         swapHeadline(targetH);
       }
 
-      animId = requestAnimationFrame(tick);
+      if (isDesktop) {
+        const isDraining =
+          !scrollDrivenRef.current &&
+          !isBrokenRef.current &&
+          !isHoldingRef.current &&
+          targetRef.current > lastThresholdReachedRef.current + 0.0001;
+        const isSettling =
+          !isBrokenRef.current &&
+          Math.abs(shownRef.current - targetRef.current) > 0.0001;
+        const needsNext =
+          !document.hidden &&
+          (isHoldingRef.current || isAnimatingRamRef.current || isDraining || isSettling);
+        if (needsNext) {
+          scheduleTick();
+        }
+      } else {
+        animId = requestAnimationFrame(tick);
+      }
     };
 
-    animId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(animId);
-  }, [executeRam, executeBreach, swapHeadline]);
+    const handleVisibilityChange = () => {
+      if (!isDesktop) return;
+      if (document.hidden) {
+        activePointerIdRef.current = null;
+        isHoldingRef.current = false;
+        if (rafScheduled) {
+          cancelAnimationFrame(animId);
+          rafScheduled = false;
+        }
+      } else {
+        scheduleTick();
+      }
+    };
+
+    if (isDesktop) {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      scheduleTick();
+    } else {
+      animId = requestAnimationFrame(tick);
+    }
+
+    return () => {
+      isDisposed = true;
+      scheduleTickRef.current = () => {};
+      cancelAnimationFrame(animId);
+      if (isDesktop) {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+    };
+  }, [executeRam, executeBreach, swapHeadline, revealWallScene, hideWallScene]);
 
   // Desktop ScrollTrigger Setup (pins section for +=350% scroll and maps to target)
   useEffect(() => {
-    if (reducedMotion || window.innerWidth < 768) return;
+    if (reducedMotion || window.innerWidth < 768) {
+      scrollDrivenRef.current = false;
+      desktopStRef.current = null;
+      unlockScroll();
+      return;
+    }
 
     const ctx = gsap.context(() => {
       const container = containerRef.current;
@@ -1484,34 +2361,64 @@ export const Charge = () => {
         start: 'top top',
         end: () => `+=${window.innerHeight * 3.5}`,
         pin: true,
+        pinSpacing: true,
+        anticipatePin: 1,
         scrub: 0.1,
         onUpdate: (self) => {
-          if (!isHoldingRef.current) {
-            targetRef.current = self.progress;
-          }
+          if (isBrokenRef.current || isHoldingRef.current) return;
+          targetRef.current = self.progress >= 0.985 ? 1 : self.progress;
+          scheduleTickRef.current();
+        },
+        onLeave: () => {
+          if (isBrokenRef.current) return;
+          targetRef.current = 1;
+          scheduleTickRef.current();
         },
       });
 
       desktopStRef.current = st;
+      scrollDrivenRef.current = true;
+      ScrollTrigger.sort();
+      ScrollTrigger.refresh();
     }, containerRef);
 
-    return () => ctx.revert();
-  }, [reducedMotion]);
+    return () => {
+      scrollDrivenRef.current = false;
+      desktopStRef.current = null;
+      unlockScroll();
+      ctx.revert();
+    };
+  }, [reducedMotion, unlockScroll]);
 
-  // Controls Handlers
-  const startCharge = () => {
+  // Controls Handlers (pointer events only on touch/mouse)
+  const startCharge = (pointerId) => {
     if (isBrokenRef.current || isAnimatingRamRef.current) return;
+    if (pointerId !== undefined) {
+      activePointerIdRef.current = pointerId;
+    }
+    holdStartTimeRef.current = performance.now();
     isHoldingRef.current = true;
+    if (isDesktopViewport()) scheduleTickRef.current();
   };
 
-  const stopCharge = () => {
+  const stopCharge = (pointerId) => {
+    if (
+      pointerId !== undefined &&
+      activePointerIdRef.current !== null &&
+      activePointerIdRef.current !== pointerId
+    ) {
+      return;
+    }
+    activePointerIdRef.current = null;
     isHoldingRef.current = false;
+    if (isDesktopViewport()) scheduleTickRef.current();
   };
 
   // Window blur safeguard
   useEffect(() => {
-    window.addEventListener('blur', stopCharge);
-    return () => window.removeEventListener('blur', stopCharge);
+    const handleBlur = () => stopCharge();
+    window.addEventListener('blur', handleBlur);
+    return () => window.removeEventListener('blur', handleBlur);
   }, []);
 
   // -----------------------------------------------------------------------
@@ -1519,7 +2426,22 @@ export const Charge = () => {
   // -----------------------------------------------------------------------
   if (reducedMotion) {
     return (
-      <section className="w-full flex flex-col space-y-12 py-16 px-4 bg-[#E8DFC9] text-black pb-28">
+      <section
+        data-charge-state="intro"
+        className="charge-section relative z-30 w-full flex flex-col space-y-12 py-16 px-4 bg-[#E8DFC9] text-black pb-28 mt-10 md:mt-14 mb-0"
+      >
+        <div
+          aria-hidden="true"
+          className="absolute -bottom-[20px] md:-bottom-[24px] left-0 right-0 pointer-events-none z-30 overflow-visible select-none"
+        >
+          <svg
+            viewBox="0 0 1200 24"
+            preserveAspectRatio="none"
+            className="w-full h-[20px] md:h-[24px] fill-[#E8DFC9] block"
+          >
+            <path d="M0,0 L1200,0 L1200,9 L1170,18 L1140,7 L1110,21 L1080,8 L1050,19 L1020,6 L990,22 L960,10 L930,20 L900,8 L870,23 L840,7 L810,18 L780,9 L750,22 L720,6 L690,19 L660,8 L630,21 L600,9 L570,23 L540,7 L510,19 L480,6 L450,21 L420,9 L390,22 L360,8 L330,18 L300,7 L270,21 L240,9 L210,23 L180,8 L150,20 L120,7 L90,19 L60,10 L30,22 L0,11 Z" />
+          </svg>
+        </div>
         <div className="max-w-3xl mx-auto border-3 border-black p-6 bg-[#FFFDF7] shadow-[6px_6px_0_#C97B1A]">
           <h2 className="font-anton text-3xl sm:text-4xl text-[#0E0D0C] mb-2 uppercase">
             {CHARGE_COPY.beat1.heading}
@@ -1537,7 +2459,7 @@ export const Charge = () => {
             ))}
           </div>
           <div className="flex justify-center">
-            <img src="/assets/bull-peek.png" alt="Bull peeking over edge" width={800} height={800} className="w-48 object-contain" />
+            <img src="/assets/bull-peek.webp" alt="Bull peeking over edge" width={700} height={262} className="w-48 object-contain" />
           </div>
         </div>
 
@@ -1551,18 +2473,18 @@ export const Charge = () => {
           <p className="font-plex text-xs text-black/70 mb-4 font-bold uppercase tracking-wider">
             {CHARGE_COPY.reducedMotion.wallCaption}
           </p>
-          <img src="/assets/bull-charge.png" alt="Bull facing wall" width={1200} height={1200} className="w-full max-w-md mx-auto object-contain" />
+          <img src="/assets/bull-charge.webp" alt="Bull facing wall" width={900} height={600} className="w-full max-w-md mx-auto object-contain" />
         </div>
 
         <div className="max-w-3xl mx-auto border-3 border-black p-6 bg-[#C23B22]/10 shadow-[6px_6px_0_#C23B22]">
           <h2 className="font-anton text-3xl sm:text-4xl text-[#0E0D0C] mb-2 uppercase">
-            THE IMPACT
+            {UI_COPY.charge.impactHeading}
           </h2>
           <p className="font-plex text-xs text-black/70 mb-4 font-bold uppercase tracking-wider">
             {CHARGE_COPY.reducedMotion.crackedCaption}
           </p>
           <div className="relative flex justify-center py-4">
-            <img src="/assets/bull-charge.png" alt="Bull ramming the wall" width={1200} height={1200} className="w-full max-w-sm object-contain" />
+            <img src="/assets/bull-charge.webp" alt="Bull ramming the wall" width={900} height={600} className="w-full max-w-sm object-contain" />
           </div>
         </div>
 
@@ -1577,7 +2499,7 @@ export const Charge = () => {
             {CHARGE_COPY.beat4.subheading}
           </p>
           <div className="relative flex justify-center">
-            <img src="/assets/bull-standing.png" alt="Bull standing in suit" width={1200} height={1600} className="max-h-[50vh] object-contain" />
+            <img src="/assets/bull-standing.webp" alt="Bull standing in suit" width={700} height={1050} className="max-h-[50vh] object-contain" />
             <div className="absolute top-4 right-8 bg-[#E8DFC9] text-black font-plex text-xs font-bold px-3 py-2 border-2 border-black shadow-[3px_3px_0_#C97B1A]">
               "{CHARGE_COPY.beat4.bullLine}"
             </div>
@@ -1593,10 +2515,9 @@ export const Charge = () => {
   return (
     <section
       ref={containerRef}
-      className="charge-section relative w-full select-none"
+      data-charge-state={isBroken ? 'broken' : 'intro'}
+      className="charge-section min-h-screen relative z-30 w-full select-none mt-10 md:mt-14 mb-0"
       style={{
-        height: 'calc(100dvh - var(--ticker-h, 0px))',
-        minHeight: '560px',
         overflowX: 'clip',
         display: 'flex',
         flexDirection: 'column',
@@ -1610,25 +2531,52 @@ export const Charge = () => {
       }}
     >
       {/* Torn-paper edge overlapping bottom of hero */}
-      <div className="absolute -top-7 sm:-top-8 left-0 right-0 pointer-events-none z-30 overflow-visible select-none">
+      <div
+        ref={tornEdgeRef}
+        className="absolute -top-[28px] md:-top-[40px] left-0 right-0 pointer-events-none z-30 overflow-visible select-none"
+      >
         <svg
-          viewBox="0 0 1200 36"
+          viewBox="0 0 1200 40"
           preserveAspectRatio="none"
-          className="w-full h-8 sm:h-9 fill-[#E8DFC9] block drop-shadow-[0_-4px_6px_rgba(0,0,0,0.6)]"
+          className="w-full h-[28px] md:h-[40px] fill-[#E8DFC9] block drop-shadow-[0_-4px_6px_rgba(0,0,0,0.6)]"
         >
-          <path d="M0,36 L0,18 Q15,8 30,20 Q45,28 60,14 Q75,6 90,18 Q105,26 120,12 Q135,4 150,18 Q165,26 180,12 Q195,6 210,22 Q225,28 240,12 Q255,4 270,18 Q285,26 300,12 Q315,6 330,20 Q345,28 360,12 Q375,4 390,22 Q405,28 420,12 Q435,6 450,18 Q465,26 480,12 Q495,4 510,22 Q525,28 540,12 Q555,6 570,18 Q585,26 600,12 Q615,4 630,22 Q645,28 660,12 Q675,6 690,18 Q705,26 720,12 Q735,4 750,22 Q765,28 780,12 Q795,6 810,18 Q825,26 840,12 Q855,4 870,22 Q885,28 900,12 Q915,6 930,18 Q945,26 960,12 Q975,4 990,22 Q1005,28 1020,12 Q1035,6 1050,18 Q1065,26 1080,12 Q1095,4 1110,22 Q1125,28 1140,12 Q1155,6 1170,18 Q1185,26 1200,12 L1200,36 Z" />
+          <path d="M0,40 L0,16 L30,6 L60,18 L90,8 L120,22 L150,6 L180,18 L210,4 L240,20 L270,8 L300,24 L330,6 L360,18 L390,4 L420,22 L450,10 L480,25 L510,7 L540,19 L570,5 L600,22 L630,8 L660,24 L690,6 L720,20 L750,4 L780,22 L810,9 L840,25 L870,7 L900,19 L930,5 L960,22 L990,8 L1020,24 L1050,6 L1080,20 L1110,5 L1140,22 L1170,8 L1200,16 L1200,40 Z" />
         </svg>
       </div>
 
-      {/* Halftone texture overlay */}
-      <div className="absolute inset-0 halftone-overlay opacity-30 pointer-events-none" />
+      {/* Halftone & film grain strictly bounded to Charge section edge (fade cleanly when broken) */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div
+          className="absolute inset-0 halftone-overlay pointer-events-none"
+          style={{
+            opacity: isBroken ? 0 : 0.3,
+            transition: reducedMotion ? 'none' : 'opacity 400ms ease-in-out',
+          }}
+        />
+        <div
+          className="comic-grain-local pointer-events-none"
+          style={{
+            opacity: isBroken ? 0 : 0.04,
+            transition: reducedMotion ? 'none' : 'opacity 400ms ease-in-out',
+          }}
+        />
+      </div>
+
+      {/* Viewport-safe inner frame bounded by 100svh so controls remain visible */}
+      <div
+        className="charge-inner-frame w-full flex flex-col items-center justify-start min-h-[480px]"
+        style={{
+          height: 'calc(100svh - clamp(24px, 7svh, 72px) - var(--ticker-h, 40px))',
+          maxHeight: '100%',
+        }}
+      >
 
       {/* ============================================================= */}
-      {/* 1. HEADLINE ROW (Anton, centered, min-height 2.1em reserved)   */}
+      {/* 1. HEADLINE ROW (Anton, centered, min-height reserved)        */}
       {/* ============================================================= */}
       <div
         className="charge-headline-row w-full max-w-4xl mx-auto flex items-center justify-center text-center px-4 z-20 pointer-events-none shrink-0 mb-1"
-        style={{ minHeight: '2.1em' }}
+        style={{ minHeight: 'clamp(54px, 14vw, 105px)', height: 'clamp(54px, 14vw, 105px)' }}
       >
         <h2
           ref={headlineElRef}
@@ -1665,17 +2613,6 @@ export const Charge = () => {
           ref={rumbleRef}
           className="rumble-wrapper relative w-full h-full flex items-center justify-center overflow-hidden"
         >
-          {/* Ground Strip at 94% stage height with 3px ink line */}
-          <div
-            ref={groundStripRef}
-            className="absolute left-0 right-0 bottom-0 pointer-events-none z-10"
-            style={{
-              top: `${stageSizes.groundY}px`,
-              backgroundColor: isBroken ? '#151311' : '#C7B99D',
-              borderTop: '3px solid #2A1510',
-            }}
-          />
-
           {/* ----------------------------------------------------------- */}
           {/* INTRO: NEWSPAPERS STACK & PEEK BULL (Top 18% empty for bull)*/}
           {/* ----------------------------------------------------------- */}
@@ -1685,55 +2622,76 @@ export const Charge = () => {
             style={{
               top: '18%',
               width: 'min(calc(100% - 32px), 520px)',
-              height: 'min(82%, calc(var(--sh, 400px) * 0.82))',
+              height: 'calc(100% - 18% - 20px)',
+              maxHeight: '440px',
             }}
           >
             <div className="relative w-full h-full flex items-center justify-center">
-              {/* Bull-peek behind top card */}
-              <div
-                className="bull-peek-anchor absolute pointer-events-none"
-                style={{
-                  left: '64%',
-                  width: '30%',
-                  top: 0,
-                  transform: 'translate(-50%, -55%)',
-                  zIndex: 5,
-                  overflow: 'visible',
-                }}
-              >
-                <div
-                  ref={peekBullRef}
-                  className="bull-peek-sprite w-full"
-                  style={{ transform: 'translateY(100%)', opacity: 0 }}
-                >
-                  <img
-                    src="/assets/bull-peek.png"
-                    alt="Bull peeking from behind newspaper"
-                    width={800}
-                    height={800}
-                    className="w-full object-contain"
-                  />
-                </div>
-              </div>
-
               {/* 4 Newspaper Cards */}
               {CHARGE_COPY.beat1.headlines.map((item, idx) => {
-                const rotations = [-1.8, 1.5, -1.0, 0.5];
-                const yOffsets = [-12, -8, -4, 0];
-                const zIndices = [1, 2, 3, 10];
+                const isTop = idx === topIdx;
 
                 return (
                   <div
                     key={idx}
+                    ref={(el) => (cardWrappersRef.current[idx] = el)}
                     className="news-card-wrapper absolute inset-0 pointer-events-none"
                     style={{
-                      transform: `rotate(${rotations[idx]}deg) translateY(${yOffsets[idx]}px)`,
-                      zIndex: zIndices[idx],
+                      transform: `rotate(${CARD_ROTATIONS[idx]}deg) translateY(${CARD_Y_OFFSETS[idx]}px)`,
+                      zIndex: CARD_Z_INDICES[idx],
                     }}
                   >
+                    {/* Bull-peek anchored inside bottom paper (index 0) behind its top edge */}
+                    {idx === 0 && (
+                      <div
+                        className="bull-peek-anchor pointer-events-none"
+                        style={{
+                          position: 'absolute',
+                          left: '64%',
+                          top: 0,
+                          width: 'min(56%, calc(var(--sh, 400px) * 0.46))',
+                          transform: 'translate(-50%, calc(-100% + 6px))',
+                          zIndex: -1,
+                          overflow: 'visible',
+                        }}
+                      >
+                        <div
+                          ref={peekBullRef}
+                          className="bull-peek-sprite w-full"
+                          style={{ opacity: 0 }}
+                        >
+                          <img
+                            src="/assets/bull-peek.webp"
+                            alt="Bull peeking from behind newspaper"
+                            width={700}
+                            height={262}
+                            className="w-full object-contain"
+                          />
+                        </div>
+                      </div>
+                    )}
+
                     <div
                       ref={(el) => (newsPagesRef.current[idx] = el)}
-                      className="news-card-item w-full h-full bg-[#FFFDF7] border-3 border-black p-3.5 sm:p-5 shadow-[4px_4px_0_#0E0D0C] flex flex-col justify-between overflow-hidden"
+                      role={isTop ? 'button' : undefined}
+                      tabIndex={isTop ? 0 : -1}
+                      aria-label={isTop ? CHARGE_COPY.beat1.tossAria : undefined}
+                      onClick={isTop ? () => handleToss(idx) : undefined}
+                      onKeyDown={
+                        isTop
+                          ? (e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                handleToss(idx);
+                              }
+                            }
+                          : undefined
+                      }
+                      className={`news-card-item w-full h-full bg-[#FFFDF7] border-3 border-black p-3.5 sm:p-5 shadow-[4px_4px_0_#0E0D0C] flex flex-col justify-between overflow-hidden select-none ${
+                        isTop
+                          ? 'pointer-events-auto cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C97B1A]'
+                          : 'pointer-events-none'
+                      }`}
                       style={{ opacity: 0 }}
                     >
                       <div className="border-b-2 border-black pb-1 mb-1 text-center shrink-0">
@@ -1750,32 +2708,33 @@ export const Charge = () => {
 
                       <div className="flex items-center justify-between text-[9px] sm:text-[10px] font-plex text-black/60 mb-1 shrink-0 whitespace-nowrap overflow-hidden">
                         <span className="truncate mr-2">{item.volume}</span>
-                        <span className="shrink-0 font-bold">PRICE: 2 SATOSHIS</span>
+                        <span className="shrink-0 font-bold">{UI_COPY.charge.paperPrice}</span>
                       </div>
 
-                      <div className="font-anton text-lg sm:text-2xl text-black uppercase leading-tight line-clamp-2 mb-1 shrink-0">
+                      <div className="font-anton text-[17px] sm:text-2xl text-black uppercase leading-tight mb-1 shrink-0">
                         {item.headline}
                       </div>
 
-                      <div className="font-plex text-[11px] sm:text-xs text-black/75 line-clamp-2 leading-snug shrink-0">
+                      <div className="font-plex text-[11px] sm:text-xs text-black/75 leading-snug shrink-0">
                         {item.sub}
                       </div>
 
-                      <div className="mt-auto h-11 sm:h-12 flex justify-end items-end relative shrink-0">
+                      <div className="mt-auto h-9 sm:h-11 flex justify-between items-end relative shrink-0">
+                        {isTop && !hasTossed && (
+                          <div className="news-toss-hint font-plex text-[9px] sm:text-[10px] text-black/60 uppercase tracking-wider animate-pulse pointer-events-none select-none pb-0.5">
+                            {CHARGE_COPY.beat1.tapToToss}
+                          </div>
+                        )}
                         <div
                           ref={(el) => (stampsRef.current[idx] = el)}
-                          className="news-stamp-item border-2 sm:border-3 border-[#C23B22] bg-[#FFFDF7]/95 px-2.5 py-0.5 text-center shadow-[0_0_0_1px_#000] pointer-events-none"
+                          className="news-stamp-item border-2 sm:border-3 border-[#C23B22] bg-[#FFFDF7]/95 px-2.5 py-0.5 text-center shadow-[0_0_0_1px_#000] pointer-events-none ml-auto whitespace-nowrap"
                           style={{
-                            maxWidth: '45%',
                             transform: 'rotate(-8deg)',
                             opacity: 0,
                           }}
                         >
-                          <div className="font-anton text-xs sm:text-sm text-[#C23B22] uppercase tracking-wide leading-tight">
-                            ★ REDACTED ★
-                          </div>
-                          <div className="text-[8px] font-plex text-[#C23B22] tracking-widest uppercase font-bold">
-                            VERDICT
+                          <div className="font-anton text-xs sm:text-sm text-[#C23B22] uppercase tracking-wide leading-tight whitespace-nowrap">
+                            {item.stamp}
                           </div>
                         </div>
                       </div>
@@ -1785,6 +2744,31 @@ export const Charge = () => {
               })}
             </div>
           </div>
+
+          {/* ========================================================= */}
+          {/* WALL SCENE GROUP                                          */}
+          {/* (Ground strip, wall, sign, bull & dust)                   */}
+          {/* Hidden during newspaper intro, revealed on charge         */}
+          {/* ========================================================= */}
+          <div
+            ref={wallSceneGroupRef}
+            className="wall-scene-layers absolute inset-0 pointer-events-none"
+            style={{
+              visibility: 'hidden',
+              opacity: 0,
+            }}
+          >
+            {/* Ground Strip at 94% stage height with 3px ink line */}
+            <div
+              ref={groundStripRef}
+              className="absolute left-0 right-0 bottom-0 pointer-events-none z-10"
+              style={{
+                top: `${stageSizes.groundY}px`,
+                backgroundColor: isBroken ? '#151311' : '#C7B99D',
+                borderTop: '3px solid #2A1510',
+                transform: 'translateY(100%)',
+              }}
+            />
 
           {/* ----------------------------------------------------------- */}
           {/* 3. THE 3D BRICK WALL & STREET SIGN (One inline SVG)         */}
@@ -1989,10 +2973,10 @@ export const Charge = () => {
               style={{ willChange: 'transform' }}
             >
               <img
-                src="/assets/bull-charge.png"
+                src="/assets/bull-charge.webp"
                 alt="Bull charging into wall"
-                width={1200}
-                height={1200}
+                width={900}
+                height={600}
                 className="w-full h-full object-contain"
               />
 
@@ -2139,7 +3123,7 @@ export const Charge = () => {
                     letterSpacing="0.06em"
                     className="select-none font-bold"
                   >
-                    WALL ST.
+                    {CHARGE_COPY.beat2.sign}
                   </text>
 
                   {/* Left Bolt (pops off at Ram 2) */}
@@ -2198,57 +3182,85 @@ export const Charge = () => {
               }}
             />
           ))}
+          </div>
 
           {/* ----------------------------------------------------------- */}
           {/* 7. CLOSING SCENE: Standing Bull & Destination Reached       */}
           {/* ----------------------------------------------------------- */}
-          {isBroken && (
-            <div className="breach-stage absolute inset-0 flex flex-col items-center justify-center p-4 z-30 pointer-events-none">
-              <div className="text-center max-w-xl mb-2 px-2">
-                <span className="font-plex text-xs tracking-widest text-[#F2B24A] font-bold uppercase">
-                  CANTON NETWORK // DESTINATION REACHED
-                </span>
-                <p className="font-plex text-xs sm:text-sm text-[#C97B1A] font-bold mt-1">
-                  {CHARGE_COPY.beat4.subheading}
-                </p>
-              </div>
-
-              {/* Standing Bull in suit */}
-              <div className="relative flex justify-center items-end" style={{ maxHeight: '38vh' }}>
-                <img
-                  ref={standingBullRef}
-                  src="/assets/bull-standing.png"
-                  alt="Bull in suit standing proud, brushing dust off lapel"
-                  width={1200}
-                  height={1600}
-                  loading="lazy"
-                  className="max-h-[34vh] sm:max-h-[38vh] object-contain drop-shadow-[0_8px_16px_rgba(0,0,0,0.85)]"
-                  style={{ transform: 'translateY(120px)', opacity: 0 }}
-                />
-
-                {/* Deadpan Speech Bubble: "Took you long enough." */}
-                <div
-                  ref={speechBubbleRef}
-                  className="bull-speech-bubble absolute -top-3 -right-2 sm:-right-12 bg-[#E8DFC9] text-black font-plex font-bold text-xs sm:text-sm px-3.5 py-1.5 border-2 sm:border-3 border-black shadow-[4px_4px_0_#C97B1A] max-w-[180px]"
-                  style={{ opacity: 0, transform: 'scale(0.7)' }}
-                >
-                  "{CHARGE_COPY.beat4.bullLine}"
-                  <div className="absolute -bottom-2.5 left-4 w-0 h-0 border-l-[5px] border-l-transparent border-t-[5px] border-t-[#E8DFC9] border-r-[5px] border-r-transparent" />
-                </div>
-              </div>
-
-              {/* Scroll down prompt */}
-              <div
-                ref={scrollArrowRef}
-                className="scroll-down-prompt flex flex-col items-center gap-1 mt-2 opacity-0"
-              >
-                <span className="font-plex text-[9px] tracking-widest text-[#E8DFC9]/75 uppercase">
-                  {CHARGE_COPY.beat4.scrollPrompt}
-                </span>
-                <ArrowDown className="w-3.5 h-3.5 text-[#F2B24A] animate-bounce" />
-              </div>
+          <div
+            className="breach-stage absolute inset-0 z-30 pointer-events-none p-3 flex flex-col items-center justify-between"
+            style={{ visibility: isBroken ? 'visible' : 'hidden' }}
+          >
+            {/* 1) Text block at the top (flex none), centred: subheading 16px (sm: 20px) bold, line-height 1.25 */}
+            <div className="flex-none text-center px-2 z-20">
+              <p className="font-plex text-[16px] sm:text-[20px] text-[#C97B1A] font-bold leading-[1.25]">
+                {CHARGE_COPY.beat4.subheading}
+              </p>
             </div>
-          )}
+
+            {/* 2) Bull area (flex 1, min-height 0, position relative, flex column, align-items center, justify-content flex-end) */}
+            <div ref={bullAreaRef} className="flex-1 min-h-0 w-full relative flex flex-col items-center justify-end">
+              {/* 4) WALL ST. sign lies on the ground to the right of the bull, bbox bottom 2px above ground line (bottom: 4px), >=12px right of shoe, rotated -10deg */}
+              <div
+                className="absolute z-0 pointer-events-none transition-opacity duration-200"
+                style={{
+                  bottom: '4px',
+                  left: `${signLayout.left}px`,
+                  transform: 'rotate(-10deg)',
+                  transformOrigin: 'bottom left',
+                  width: `${signLayout.width}px`,
+                  opacity: signLayout.visible ? 1 : 0,
+                }}
+              >
+                <svg
+                  viewBox="0 0 545 190"
+                  className="w-full h-auto drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)] block"
+                >
+                  <rect x="5" y="5" width="537.5" height="182.75" rx="4" fill="#C23B22" />
+                  <rect x="0" y="0" width="537.5" height="182.75" rx="4" fill="#0E0D0C" stroke="#2A1510" strokeWidth="3.5" />
+                  <rect x="8" y="8" width="521.5" height="166.75" rx="2" fill="none" stroke="#E8DFC9" strokeWidth="2" />
+                  <text
+                    x="268.75"
+                    y="128"
+                    textAnchor="middle"
+                    fill="#E8DFC9"
+                    fontFamily="Anton, sans-serif"
+                    fontSize="108"
+                    letterSpacing="0.06em"
+                    className="select-none font-bold"
+                  >
+                    {CHARGE_COPY.beat2.sign}
+                  </text>
+                </svg>
+              </div>
+
+              {/* Speech bubble: normal element ABOVE bull inside column (not absolute). Centred, max-width 200px, tail pointing DOWN at top of head, 10px gap above head */}
+              <div
+                ref={speechBubbleRef}
+                className="bull-speech-bubble relative z-20 bg-[#E8DFC9] text-black font-plex font-bold text-xs sm:text-sm px-3.5 py-1.5 border-2 sm:border-3 border-black shadow-[4px_4px_0_#C97B1A] max-w-[200px] mb-[10px] text-center shrink-0"
+                style={{ opacity: 0, transform: 'scale(0.7)', transformOrigin: 'bottom center' }}
+              >
+                "{CHARGE_COPY.beat4.bullLine}"
+                <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-t-[8px] border-t-black border-r-[6px] border-r-transparent" />
+                <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-l-transparent border-t-[7px] border-t-[#E8DFC9] border-r-[5px] border-r-transparent" />
+              </div>
+
+              {/* Bull image below it: height fills remaining space, min 200px, max 380px, width auto, object-fit contain, feet on ground line */}
+              <img
+                ref={standingBullRef}
+                src="/assets/bull-standing.webp"
+                alt="Bull in suit standing proud, brushing dust off lapel"
+                width={700}
+                height={1050}
+                onLoad={updateSignLayout}
+                className="flex-1 min-h-[160px] sm:min-h-[200px] max-h-[380px] w-auto object-contain object-bottom drop-shadow-[0_8px_16px_rgba(0,0,0,0.85)] z-10"
+                style={{ transform: 'translateY(120px)', opacity: 0 }}
+              />
+
+              {/* 3) Ground line: 2px line (bronze #C97B1A at 40% opacity) at bottom of bull area */}
+              <div className="w-full h-[2px] bg-[#C97B1A]/40 shrink-0 z-10" />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2256,91 +3268,115 @@ export const Charge = () => {
       {/* 3. CONTROLS ROW: Hold button, flat progress bar, 72px gutter  */}
       {/* ============================================================= */}
       <div
-        className="charge-controls-row w-full max-w-[420px] mx-auto px-4 flex flex-col items-center z-30 select-none"
+        className="charge-controls-row w-full max-w-[420px] mx-auto px-4 flex flex-col items-center z-30 select-none shrink-0"
         style={{
           paddingBottom: '72px', // Free bottom gutter so floating sound button never overlaps
         }}
       >
-        {!isBroken ? (
-          <>
-            {/* HOLD TO CHARGE BUTTON */}
-            <button
-              ref={holdButtonRef}
-              type="button"
-              tabIndex={0}
-              aria-label="Hold to charge through the wall"
-              onPointerDown={(e) => {
+        {/* HOLD BUTTON & PROGRESS BAR (visible when not broken) */}
+        <div
+          className={`w-full flex flex-col items-center ${isBroken ? 'hidden' : 'flex'}`}
+        >
+          {/* HOLD TO CHARGE BUTTON */}
+          <button
+            ref={holdButtonRef}
+            type="button"
+            tabIndex={0}
+            aria-label={UI_COPY.charge.holdAria}
+            onPointerDown={(e) => {
+              if (e.pointerType === 'mouse' && e.button !== 0) return;
+              try {
                 e.currentTarget.setPointerCapture(e.pointerId);
+              } catch (_) {}
+              startCharge(e.pointerId);
+            }}
+            onPointerUp={(e) => {
+              try {
+                if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+                  e.currentTarget.releasePointerCapture(e.pointerId);
+                }
+              } catch (_) {}
+              stopCharge(e.pointerId);
+            }}
+            onPointerCancel={(e) => {
+              try {
+                if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+                  e.currentTarget.releasePointerCapture(e.pointerId);
+                }
+              } catch (_) {}
+              stopCharge(e.pointerId);
+            }}
+            onLostPointerCapture={(e) => {
+              stopCharge(e.pointerId);
+            }}
+            onContextMenu={(e) => e.preventDefault()}
+            onKeyDown={(e) => {
+              if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) {
+                e.preventDefault();
                 startCharge();
-              }}
-              onPointerUp={(e) => {
-                try {
-                  e.currentTarget.releasePointerCapture(e.pointerId);
-                } catch (_) {}
+              }
+            }}
+            onKeyUp={(e) => {
+              if (e.key === ' ' || e.key === 'Enter') {
+                e.preventDefault();
                 stopCharge();
-              }}
-              onPointerCancel={(e) => {
-                try {
-                  e.currentTarget.releasePointerCapture(e.pointerId);
-                } catch (_) {}
-                stopCharge();
-              }}
-              onContextMenu={(e) => e.preventDefault()}
-              onKeyDown={(e) => {
-                if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) {
-                  e.preventDefault();
-                  startCharge();
-                }
-              }}
-              onKeyUp={(e) => {
-                if (e.key === ' ' || e.key === 'Enter') {
-                  e.preventDefault();
-                  stopCharge();
-                }
-              }}
-              className="w-full py-3 sm:py-3.5 px-6 font-anton text-lg sm:text-xl tracking-wider uppercase border-3 border-black shadow-[4px_4px_0_#0E0D0C] bg-[#C97B1A] hover:bg-[#d88720] active:bg-[#F2B24A] text-black transition-colors cursor-pointer outline-none focus-visible:outline-2 focus-visible:outline-black focus-visible:outline-offset-2"
-              style={{
-                touchAction: 'none',
-                userSelect: 'none',
-                WebkitTouchCallout: 'none',
-              }}
-            >
-              <span ref={buttonTextRef}>⚡ {CHARGE_COPY.mobileButton.holdText}</span>
-            </button>
+              }
+            }}
+            className="w-full py-3 sm:py-3.5 px-6 font-anton text-lg sm:text-xl tracking-wider uppercase border-3 border-black shadow-[4px_4px_0_#0E0D0C] bg-[#C97B1A] hover:bg-[#d88720] active:bg-[#F2B24A] text-black transition-colors cursor-pointer outline-none focus-visible:outline-2 focus-visible:outline-black focus-visible:outline-offset-2"
+            style={{
+              touchAction: 'none',
+              userSelect: 'none',
+              WebkitUserSelect: 'none',
+              WebkitTouchCallout: 'none',
+              WebkitTapHighlightColor: 'transparent',
+            }}
+          >
+            <span ref={buttonTextRef}>{CHARGE_COPY.mobileButton.holdText}</span>
+          </button>
 
-            {/* Flat progress bar: dark track, flat bronze fill (NO gradient), 3 red ticks */}
+          {/* Flat progress bar: dark track, flat bronze fill (NO gradient), 3 red ticks */}
+          <div
+            className="w-full h-3 bg-[#0E0D0C] border-2 border-black mt-2.5 relative overflow-hidden"
+            role="progressbar"
+            aria-label={UI_COPY.charge.progressAria}
+          >
+            {/* Flat bronze fill animated strictly via transform scaleX for iOS GPU painting */}
             <div
-              className="w-full h-3 bg-[#0E0D0C] border-2 border-black mt-2.5 relative overflow-hidden"
-              role="progressbar"
-              aria-label="Charge Progress"
-            >
-              {/* Flat bronze fill */}
-              <div
-                ref={progressBarFillRef}
-                className="h-full bg-[#C97B1A]"
-                style={{ width: '0%' }}
-              />
+              ref={progressBarFillRef}
+              className="w-full h-full bg-[#C97B1A]"
+              style={{
+                transformOrigin: 'left center',
+                transform: 'scaleX(0)',
+                willChange: 'transform',
+              }}
+            />
 
-              {/* 3 Red ticks at RAM_THRESHOLDS (62%, 78%, 90%) */}
-              {RAM_THRESHOLDS.map((thresh) => (
-                <div
-                  key={thresh}
-                  className="absolute top-0 bottom-0 w-0.5 bg-[#C23B22] z-10 pointer-events-none"
-                  style={{ left: `${thresh * 100}%` }}
-                />
-              ))}
-            </div>
-          </>
-        ) : (
-          /* RUN IT BACK button when breached */
+            {/* 3 Red ticks at RAM_THRESHOLDS (62%, 78%, 90%) */}
+            {RAM_THRESHOLDS.map((thresh) => (
+              <div
+                key={thresh}
+                className="absolute top-0 bottom-0 w-0.5 bg-[#C23B22] z-10 pointer-events-none"
+                style={{ left: `${thresh * 100}%` }}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* RUN IT BACK BUTTON (visible when broken) */}
+        <div
+          className={`w-full flex flex-col items-center mt-[18px] ${isBroken ? 'flex' : 'hidden'}`}
+        >
+          {/* B. RUN IT BACK BUTTON: compact pill */}
           <button
             type="button"
             onClick={handleRunItBack}
-            className="px-6 py-3 bg-[#C97B1A] hover:bg-[#F2B24A] text-black border-3 border-black font-anton text-lg tracking-wider uppercase shadow-[4px_4px_0_#000] active:scale-95 cursor-pointer transition-transform"
+            aria-label={CHARGE_COPY.runItBack}
+            className="min-h-[44px] min-w-[44px] px-4 py-2 inline-flex items-center justify-center rounded-full font-plex text-[12px] uppercase tracking-wider text-[#F2B24A] bg-transparent border-2 border-[#C97B1A] shadow-[3px_3px_0_rgba(201,123,26,0.45)] hover:bg-[#C97B1A] hover:text-black active:translate-x-[2px] active:translate-y-[2px] active:shadow-[3px_3px_0_rgba(201,123,26,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F2B24A] cursor-pointer transition-colors"
           >
             ↺ {CHARGE_COPY.runItBack}
           </button>
-        )}
+        </div>
+      </div>
       </div>
 
       {/* DEBUG PANEL: mounts strictly when ?debug=charge is present in URL */}
@@ -2358,6 +3394,24 @@ export const Charge = () => {
           toggleOutlines={toggleOutlines}
         />
       )}
+
+      {/* Torn-paper edge hanging over .charge-desk-bridge when "intro" (fades cleanly to nothing on "broken") */}
+      <div
+        aria-hidden="true"
+        className="charge-bottom-torn-edge absolute -bottom-[20px] md:-bottom-[24px] left-0 right-0 pointer-events-none z-30 overflow-visible select-none"
+        style={{
+          opacity: isBroken ? 0 : 1,
+          transition: reducedMotion ? 'none' : 'opacity 400ms ease-in-out',
+        }}
+      >
+        <svg
+          viewBox="0 0 1200 24"
+          preserveAspectRatio="none"
+          className="w-full h-[20px] md:h-[24px] fill-[#E8DFC9] block"
+        >
+          <path d="M0,0 L1200,0 L1200,9 L1170,18 L1140,7 L1110,21 L1080,8 L1050,19 L1020,6 L990,22 L960,10 L930,20 L900,8 L870,23 L840,7 L810,18 L780,9 L750,22 L720,6 L690,19 L660,8 L630,21 L600,9 L570,23 L540,7 L510,19 L480,6 L450,21 L420,9 L390,22 L360,8 L330,18 L300,7 L270,21 L240,9 L210,23 L180,8 L150,20 L120,7 L90,19 L60,10 L30,22 L0,11 Z" />
+        </svg>
+      </div>
     </section>
   );
 };
@@ -2415,7 +3469,7 @@ const ChargeDebugPanel = ({
   return (
     <div
       className="fixed top-2 left-2 z-[99999] w-64 max-w-[calc(100vw-16px)] bg-[#0E0D0C]/95 text-[#E8DFC9] border-2 border-[#C97B1A] font-mono text-xs p-3 shadow-[4px_4px_0_#000] backdrop-blur-sm select-none"
-      style={{ maxHeight: 'calc(100dvh - 16px)', overflowY: 'auto' }}
+      style={{ maxHeight: 'calc(100svh - 16px)', overflowY: 'auto' }}
     >
       {/* Header with Hide button */}
       <div className="flex items-center justify-between border-b border-[#C97B1A]/40 pb-1.5 mb-2.5">

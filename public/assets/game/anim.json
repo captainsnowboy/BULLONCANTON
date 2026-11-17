@@ -1,0 +1,166 @@
+{
+ "version": 1,
+ "statue": {
+  "sheet": "statue-run-sheet.webp",
+  "frames": 20,
+  "cols": 5,
+  "fw": 462,
+  "fh": 300,
+  "fps": 24.0,
+  "groundY": 297,
+  "avgW": 431.6,
+  "avgH": 276.4,
+  "loopStart": 47,
+  "closureErr": 0.0137,
+  "saddle": [
+   [
+    206.1,
+    84.6
+   ],
+   [
+    205.3,
+    81.6
+   ],
+   [
+    204.3,
+    80.6
+   ],
+   [
+    206.3,
+    78.6
+   ],
+   [
+    206.7,
+    78.6
+   ],
+   [
+    206.4,
+    77.6
+   ],
+   [
+    206.7,
+    75.6
+   ],
+   [
+    207.0,
+    74.6
+   ],
+   [
+    207.2,
+    74.6
+   ],
+   [
+    206.9,
+    74.6
+   ],
+   [
+    206.7,
+    74.6
+   ],
+   [
+    206.6,
+    76.6
+   ],
+   [
+    205.7,
+    78.6
+   ],
+   [
+    206.0,
+    81.6
+   ],
+   [
+    207.5,
+    83.6
+   ],
+   [
+    206.3,
+    86.6
+   ],
+   [
+    205.7,
+    88.6
+   ],
+   [
+    206.3,
+    88.6
+   ],
+   [
+    206.9,
+    88.6
+   ],
+   [
+    206.6,
+    88.6
+   ]
+  ],
+  "hoofX": [
+   0.18,
+   0.72
+  ]
+ },
+ "bear": {
+  "sheet": "bear-run-sheet.webp",
+  "frames": 15,
+  "cols": 5,
+  "fw": 377,
+  "fh": 300,
+  "fps": 12.0,
+  "groundY": 296,
+  "avgW": 302.3,
+  "avgH": 279.7,
+  "loopStart": 39,
+  "closureErr": 0.0121,
+  "hoofX": [
+   0.3,
+   0.62
+  ]
+ },
+ "rider": {
+  "scale": 1,
+  "poses": {
+   "up": {
+    "file": "rider-up.webp",
+    "w": 169,
+    "h": 237,
+    "hip": [
+     60.0,
+     162.1
+    ]
+   },
+   "duck": {
+    "file": "rider-duck.webp",
+    "w": 226,
+    "h": 178,
+    "hip": [
+     45.0,
+     91.0
+    ]
+   },
+   "hit": {
+    "file": "rider-hit.webp",
+    "w": 196,
+    "h": 247,
+    "hip": [
+     58.2,
+     149.4
+    ]
+   },
+   "charge": {
+    "file": "rider-charge.webp",
+    "w": 199,
+    "h": 247,
+    "hip": [
+     58.2,
+     149.4
+    ]
+   }
+  }
+ },
+ "bearStill": {
+  "file": "bear-still.webp",
+  "w": 520,
+  "h": 400
+ },
+ "notes": "Anchors are in sheet pixels. saddle[i] is where the rider hip sits on statue frame i. Rider poses are pre-scaled to match. Tune offsets in the game with ?debug=anim."
+}

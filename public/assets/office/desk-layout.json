@@ -1,0 +1,43 @@
+{
+ "desk": {
+  "file": "desk.webp",
+  "width": 1231,
+  "height": 920
+ },
+ "screenHole": {
+  "leftPct": 28.43,
+  "topPct": 3.48,
+  "widthPct": 44.68,
+  "heightPct": 33.04,
+  "aspect": 1.809
+ },
+ "monitor": {
+  "topPct": 0.43,
+  "leftPct": 26.32,
+  "rightPct": 75.06,
+  "centerXPct": 50.61,
+  "bezelBottomPct": 42.83
+ },
+ "props": {
+  "plant": {
+   "file": "plant.webp",
+   "width": 481,
+   "height": 853
+  },
+  "clock": {
+   "file": "clock.webp",
+   "width": 394,
+   "height": 401
+  },
+  "frame": {
+   "file": "frame.webp",
+   "width": 432,
+   "height": 392
+  },
+  "cabinet": {
+   "file": "cabinet.webp",
+   "width": 447,
+   "height": 597
+  }
+ }
+}

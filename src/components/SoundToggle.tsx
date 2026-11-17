@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { isSoundEnabled, setSoundEnabled, subscribeSound } from '../utils/audio';
 import { SOUND_COPY } from '../copy.js';
+import { useDraggable } from '../utils/useDraggable';
 
 export const SoundToggle: React.FC = () => {
+  const drag = useDraggable<HTMLDivElement>({ memoryKey: 'sound' });
   const [enabled, setEnabled] = useState(() => isSoundEnabled());
   const [isBouncing, setIsBouncing] = useState(false);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
@@ -30,9 +32,12 @@ export const SoundToggle: React.FC = () => {
 
   return (
     <div
-      className="fixed right-4 sm:right-6 z-40"
+      ref={drag.ref}
+      {...drag.bind}
+      className="fixed right-4 sm:right-6 z-[1000]"
       style={{
         bottom: 'calc(3.5rem + env(safe-area-inset-bottom, 0px))',
+        ...drag.style,
       }}
     >
       <button

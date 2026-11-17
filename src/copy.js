@@ -3,6 +3,8 @@
  * All textual copy, one-liners, disclaimers, and ticker items.
  */
 
+import { TOKEN_TICKER } from './config.js';
+
 export const SLOGAN = "THE BULLS ARE ONCHAIN.";
 export const TITLE = "BULL ON CANTON";
 export const SUB_LABEL = "BULL ON CANTON";
@@ -12,48 +14,28 @@ export const WEEKEND_BANNER = "WALL STREET IS CLOSED. BULL IS NOT.";
 
 // Hero plain labels
 export const HERO_COPY = {
-  eyesOn: "Eyes on",
-  eyesOff: "Eyes off",
-  eyesToggleAria: "Toggle eye mode",
-  pinAria: "Lapel pin",
-  bellAria: "Bell",
-  orderSubmitted: "Order placed."
+  eyesOn: "Eyes on", eyesOff: "Eyes off", eyesToggleAria: "Toggle eye mode",
+  pinAria: "Lapel pin", bellAria: "Bell", orderSubmitted: "Not open yet."
 };
 
-// Bull one-liners triggered on bull taps (dry, deadpan corporate-speak turned degen)
-export const BULL_TAP_LINES = [
-  "Per my last block.",
-  "Circling back.",
-  "Sir, this is a Saturday.",
-  "Market's closed. I'm not.",
-  "Let's take this off-chain.",
-  "Action items: hodl.",
-  "I don't have bandwidth for your fear.",
-  "Ping me at block height 4,000,000.",
-  "Please review the attached green candle.",
-  "As per our sync, the thesis hasn't changed.",
-  "Looping in nobody.",
-  "Best regards, The Bull.",
-  "Touching base on the breakout.",
-  "Hard stop at liquidity.",
-  "Aligning deliverables with the ledger.",
-  "Let's put a pin in the dip.",
-  "Moving forward with maximum leverage.",
-  "Thanks for flagging. Still bullish.",
-  "Let's table that doubt.",
-  "Noted and ignored."
-];
+// Bull one-liners triggered on bull taps (grouped by hit region)
+export const BULL_TAP_LINES = {
+  horns: ["Mind the horns.", "Don't make me come over there.", "Still here."],
+  face: ["Yes?", "I heard you the first time.", "That's the good side.", "You can stop now.",
+         "I was never worried.", "I've seen this cycle before."],
+  suit: ["Not now. Suit's pressed.", "Per my last block.", "Market's closed. I'm not.",
+         "Sir, this is a Saturday.", "Noted."]
+};
 
 // Rapid tap special reaction (after 5 rapid taps)
 export const RAPID_TAP_LINE = "I'm working.";
 
+export const TAP_FX_WORDS = ["SNORT"];
+
 // Lapel pin tap lines
 export const PIN_TAP_LINES = [
-  "It's a pin. Relax.",
-  "Pure Canton bronze.",
-  "C-Suite certified.",
-  "Don't touch the merchandise.",
-  "Standard issue lapel pin."
+  "It's just a pin.", "Don't touch the merchandise.", "Yes, it's a C. Moving on.",
+  "Lapel pin. Standard issue."
 ];
 
 // Idle 20 seconds speech tag
@@ -61,32 +43,17 @@ export const IDLE_WATCH_LINE = "Any day now.";
 
 // Buy button interactions
 export const BUY_BUTTON = {
-  label: "BUY",
-  subtitle: "HOLD TO CHARGE",
-  earlyReleaseLine: "Not committed enough.",
-  pendingStamp: "ORDER PENDING - MARKET OPENS SOON",
-  notLiveText: "Not live yet. Follow on X for the launch.",
-  notLiveLinkText: "Follow @BullOnCanton on X",
-  successText: "Redirecting to swap...",
+  label: `BUY ${TOKEN_TICKER}`, subtitle: "TAP TO BUY",
+  pendingStamp: "NOT OPEN YET",
+  notLiveText: "Not open yet. Follow on X to know when.",
+  notLiveLinkText: "Follow on X"
 };
 
 // Ticker tape items (fictional joke tickers only - NEVER real company tickers or real prices)
 export const TICKER_ITEMS = [
-  "$BULL +420.69%",
-  "ANY DAY NOW -",
-  "COFFEE +800%",
-  "LEVERAGE 100x",
-  "SUITS PRESSED +100%",
-  "PRINTER: BRRR",
-  "BLOCKS: FINAL",
-  "CANTON SYNC: 100%",
-  "MEMO: BULLISH",
-  "FEES: NEGATIVE ZERO",
-  "HODL: MANDATORY",
-  "QUARTERLY RUN: PERPETUAL",
-  "DESK HOURS: 24/7/365",
-  "TPS: INNUMERABLE",
-  "LIQUIDITY: UNMATCHED"
+  "COFFEE +800%", "SUITS PRESSED +100%", "COMMITTEES FORMED: 12", "COMMITTEES DECIDED: 0",
+  "WEEKEND MARKETS: CLOSED", "THE BULL: NOT CLOSED", "ANY DAY NOW: DAY 3,287",
+  "EMAILS UNANSWERED: 4,112", "MEETINGS THAT COULD BE BLOCKS: ALL", "HORNS: 2", "TIES: BLACK"
 ];
 
 // Verbatim required disclaimer
@@ -94,10 +61,7 @@ export const DISCLAIMER =
   "Independent community meme. Not affiliated with or endorsed by Canton Network, Digital Asset or any institution named. Not financial advice. This token has no intrinsic value.";
 
 // Socials fallback text
-export const SOCIAL_FALLBACKS = {
-  x: "Follow on X (Twitter)",
-  telegram: "Join Telegram Community"
-};
+export const SOCIAL_FALLBACKS = { x: "Follow on X", telegram: "Join the Telegram" };
 
 // =========================================================================
 // STAGE 2: THE CHARGE SEQUENCE COPY
@@ -108,27 +72,17 @@ export const CHARGE_COPY = {
     masthead: "THE DAILY WAIT",
     subtitle: "THE GLOBAL NEWSPAPER OF PROLONGED ANTICIPATION • EST. 2017",
     caption: "(satire)",
+    tossAria: "Toss this newspaper",
+    tapToToss: "Tap to toss",
     headlines: [
-      {
-        volume: "VOL. IX No. 420",
-        headline: "INSTITUTIONS COMING, SOURCES SAY",
-        sub: "Committee formed to form subcommittee to evaluate potential pilot."
-      },
-      {
-        volume: "VOL. X No. 690",
-        headline: "ANY DAY NOW",
-        sub: "Senior managing director spotted reading whitepaper summary on commuter train."
-      },
-      {
-        volume: "VOL. XI No. 888",
-        headline: "THIS CYCLE FOR SURE",
-        sub: "Working group schedules quarterly symposium to deliberate next quarter's agenda."
-      },
-      {
-        volume: "VOL. XII No. 999",
-        headline: "WALL ST. EXPLORING BLOCKCHAIN",
-        sub: "PowerPoint deck enters third round of internal compliance revision."
-      }
+      { volume: "VOL. XII No. 4", headline: "BULL MOVES TO CANTON",
+        sub: "Wall Street's bull has a new home. More are on the way.", stamp: "NEW ADDRESS" },
+      { volume: "VOL. XII No. 3", headline: "BANKS QUIETLY TRY BLOCKCHAIN. FOR REAL.",
+        sub: "Some pilots. Some already live. Receipts further down.", stamp: "SOME ARE LIVE" },
+      { volume: "VOL. XII No. 2", headline: "WALL STREET BULL HAS NO COMMENT",
+        sub: "The symbol of traditional finance was last seen checking his watch.", stamp: "NO COMMENT" },
+      { volume: "VOL. XII No. 1", headline: "CRYPTO STILL WAITING FOR WALL STREET",
+        sub: "Experts say institutions are coming. They said that last year too.", stamp: "STILL WAITING" }
     ]
   },
   beat2: {
@@ -138,20 +92,19 @@ export const CHARGE_COPY = {
   beat4: {
     heading: "The Wall Street bull has found a new home.",
     subheading: "The bulls are on Canton. More are coming.",
-    bullLine: "Took you long enough.",
-    scrollPrompt: "SCROLL ON"
+    bullLine: "Took you long enough."
   },
   mobileButton: {
     holdText: "HOLD TO CHARGE",
     chargingText: "CHARGING...",
-    brokenText: "WALL BREACHED"
+    brokenText: "WALL DOWN"
   },
   runItBack: "RUN IT BACK",
   reducedMotion: {
-    introCaption: "The Daily Wait. Front pages of prolonged anticipation.",
-    wallCaption: "Wall Street. The bull faces the barrier.",
-    crackedCaption: "Impact. Cracks fracture the wall.",
-    breachedCaption: "Wall breached. The bull has arrived on Canton."
+    introCaption: "Four front pages from The Daily Wait, a satirical newspaper about waiting for Wall Street.",
+    wallCaption: "Wall Street. A very solid wall.",
+    crackedCaption: "The bull hits the wall. Cracks appear.",
+    breachedCaption: "The wall is down. The bull is on Canton."
   }
 };
 
@@ -159,9 +112,9 @@ export const CHARGE_COPY = {
 // STAGE 3: THE ARRIVALS BOARD COPY
 // =========================================================================
 export const ARRIVALS_COPY = {
-  title: "WALL STREET -> CANTON",
-  subtitle: "Receipts. Not vibes.",
-  counterLabel: "ARRIVALS LOGGED",
+  title: "THE RECEIPTS",
+  subtitle: "Click a row. Read the source.",
+  counterLabel: "RECEIPTS",
   sampleTag: "SAMPLE - REPLACE",
   stampLabel: "SOURCE ATTACHED",
   finalRow: {
@@ -172,12 +125,8 @@ export const ARRIVALS_COPY = {
     reaction: "Don't hold your breath."
   },
   smugReactions: [
-    "Receipt verified. Carry on.",
-    "On-chain doesn't lie.",
-    "Paper trails are forever.",
-    "Per the public record.",
-    "Filed and stamped.",
-    "Another one for the ledger."
+    "Source attached.", "Go read it.", "Don't take my word. Open the link.",
+    "Filed.", "Check the date too.", "Read the whole thing."
   ],
   buttonText: {
     x: "VIEW ON X",
@@ -195,23 +144,24 @@ export const ARRIVALS_COPY = {
     toggleLabel: "Sort by date",
   },
   nowBoardingPrefix: "NOW BOARDING",
-  emptyFilterText: "No arrivals match this filter.",
+  emptyFilterText: "Nothing here yet.",
   printer: {
     slotLabel: "RECEIPT PRINTER",
-    selectPrompt: "SELECT AN ARRIVAL TO PRINT RECEIPT",
+    selectPrompt: "Pick a row to print its receipt.",
     typeLabel: "TYPE",
-    recordedByLabel: "RECORDED BY",
-    dateLabel: "EFFECTIVE DATE",
-    institutionLabel: "INSTITUTION",
-    verifiedHeader: "CANTON ONCHAIN RECEIPT",
-    yourBankNotice: "STATUS: PENDING COMPLIANCE REVIEW (EST. 2038)",
-    yourBankDesc: "Wall Street moves at the speed of committees. The Canton bull does not wait.",
+    recordedByLabel: "POSTED BY",
+    dateLabel: "SOURCE DATE",
+    institutionLabel: "WHO",
+    verifiedHeader: "RECEIPT",
+    noteLabel: "NOTE",
+    alsoReadLabel: "ALSO READ",
+    yourBankNotice: "STATUS: IN A MEETING",
+    yourBankDesc: "Still waiting on a committee. The bull started without them.",
     closeSheet: "Close receipt",
-    grabHandle: "Drag down to close",
+    grabHandle: "Drag down to close"
   },
-  legalText:
-    "Community-curated links to public announcements. Names are shown as written by the source. No partnership, endorsement or affiliation is implied. Status labels reflect what the source states and are not a guarantee.",
-  submitPrompt: "Spotted one? Send it."
+  legalText: "Links to public announcements, with names as each source wrote them. No partnership or endorsement is implied. Status labels follow what each source says.",
+  submitPrompt: "Know one we missed? Send it."
 };
 
 // =========================================================================
@@ -226,12 +176,46 @@ export const MEME_DESK_COPY = {
     send: "3 Send"
   },
   bulls: [
-    { id: "deadpan", label: "Deadpan", file: "bull-hero-final.png" },
-    { id: "browraise", label: "Brow Raised", file: "bull-browraise.png" },
-    { id: "smug", label: "Smug", file: "bull-smug.png" },
-    { id: "shocked", label: "Shocked", file: "bull-shocked.png" },
-    { id: "watch", label: "Watch", file: "bull-watch.png" }
+    { id: "browraise", label: "Brow raised", file: "meme/faces/browraise.webp", transparent: true },
+    { id: "smug", label: "Smug", file: "meme/faces/smug.webp", transparent: true },
+    { id: "shocked", label: "Shocked", file: "meme/faces/shocked.webp", transparent: true },
+    { id: "sideeye", label: "Side-eye", file: "meme/faces/sideeye.webp", transparent: true },
+    { id: "laughing", label: "Laughing", file: "meme/faces/laughing.webp", transparent: true },
+    { id: "angry", label: "Angry", file: "meme/faces/angry.webp", transparent: true },
+    { id: "deadpan", label: "Deadpan", file: "bull-hero-final.webp", legacy: true },
+    { id: "watch", label: "Watch", file: "bull-watch.webp", legacy: true }
   ],
+  backgrounds: [
+    { id: "black", label: "Black", color: "#0E0D0C" },
+    { id: "newsprint", label: "Newsprint", color: "#E8DFC9", halftone: true },
+    { id: "bronze", label: "Bronze", color: "#C97B1A" },
+    { id: "brick", label: "Brick", color: "#942919", pattern: "brick" },
+    { id: "candles", label: "Candles", color: "#0E0D0C", pattern: "candles" },
+    { id: "sunburst", label: "Sunburst", color: "#E8DFC9", pattern: "sunburst" }
+  ],
+  shuffleButton: "Shuffle",
+  shuffleAria: "Shuffle face, background, line and props",
+  pickSections: {
+    face: "FACE",
+    background: "BACKGROUND",
+    props: "PROPS",
+    template: "TEMPLATE"
+  },
+  legacyNote: "Props work on the new faces.",
+  propControls: {
+    size: "Size",
+    turn: "Turn",
+    flip: "Flip",
+    toFront: "To front",
+    remove: "Remove",
+    reset: "Reset props",
+    smoke: "Smoke",
+    on: "On",
+    off: "Off",
+    maxProps: "Maximum 6 props.",
+    loadingProps: "Loading props.",
+    selectionAria: "Selected prop frame"
+  },
   templates: [
     { id: "classic", label: "Classic", desc: "Top & bottom captions (1:1)" },
     { id: "frontpage", label: "Front Page", desc: "The Daily Wait newspaper (4:5)" },
@@ -241,43 +225,34 @@ export const MEME_DESK_COPY = {
   giveMeLineButton: "Give me a line",
   watermarkToggle: "Add BULL ON CANTON tag",
   starterLines: [
-    "Told you I'd get here.",
-    "Market's closed. I'm still working.",
-    "Per my last block.",
-    "I was never worried.",
-    "Sir, this is a Saturday.",
-    "Took you long enough.",
-    "Anyway.",
-    "I wore the suit for this.",
-    "This meeting could have been a block.",
-    "You said \"any day now\" in 2021.",
-    "Yes, I'm onchain. No, I won't explain it.",
-    "Hold my coffee. I'm going through the wall.",
-    "Looping in the ledger.",
-    "Touching base on the breakout.",
-    "Hard stop at zero liquidity.",
-    "Action items: none.",
-    "I don't have bandwidth for your fear.",
-    "Please review the attached candle.",
-    "Let's take this off-chain.",
-    "As per our sync, thesis unchanged.",
-    "Best regards, The Bull.",
-    "Noted and ignored."
+    "Told you I'd get here.", "Market's closed. I'm still working.",
+    "I was never worried.", "Took you long enough.", "Anyway.", "I wore the suit for this.",
+    "You said \"any day now\" in 2021.", "Yes, I'm onchain. No, I won't explain it.",
+    "Hold my coffee. I'm going through the wall.", "Wall Street has entered the chat.",
+    "The bull is on Canton.", "Still bullish. Still in a suit.", "I've seen this movie before.",
+    "He was always going to end up here.", "Sir, this is a Saturday.", "Per my last block."
   ],
   buttons: {
     download: "Download PNG",
+    downloadSticker: "Download sticker (PNG)",
     share: "Share",
     copy: "Copy Image",
     postX: "Post on X"
   },
   xNotice: "X can't attach the image for you. Save it, then add it to your post.",
-  xPrefillText: "The bulls are onchain. $BULL",
+  xPrefillText: `The bulls are onchain. ${TOKEN_TICKER}`,
   iosFallbackNotice: "Press and hold the image to save it.",
+  iosSaveHint: "On iPhone: tap Download, then Save Image.",
+  iosSaveSheetInstruction: "Press and hold the image, then tap Save to Photos.",
+  iosSaveSheetClose: "Close",
+  iosSaveSheetAria: "Save meme image",
+  iosSaveSheetImgAlt: "Meme image ready to save",
   status: {
     copied: "Image copied to clipboard.",
     saved: "Meme image downloaded.",
+    stickerSaved: "Sticker image downloaded.",
     shared: "Share opened.",
-    error: "Operation not supported by browser."
+    error: "Your browser can't do that."
   }
 };
 
@@ -288,10 +263,31 @@ export const HERD_COPY = {
   heading: "JOIN THE HERD",
   runButton: "Run with the herd",
   herdSizePrefix: "Herd size: ",
-  linksHeading: "COMMUNITY",
-  linksOpenAtLaunch: "Links open at launch.",
-  xButton: "X",
-  telegramButton: "Telegram"
+  socials: {
+    xLabel: "X",
+    telegramLabel: "Telegram",
+    soon: "Soon",
+    xSoonAria: "X, link coming soon",
+    telegramSoonAria: "Telegram, link coming soon",
+    xAria: "Open X in a new tab",
+    telegramAria: "Open Telegram in a new tab"
+  },
+  address: {
+    label: "ADDRESS",
+    notLiveValue: "Not live yet",
+    copyButton: "Copy",
+    copiedButton: "Copied",
+    copyAria: "Copy address",
+    copyDisabledAria: "Copy address unavailable",
+    copiedLive: "Address copied",
+    copyFailedLive: "Could not copy address",
+    expandAria: "Show full address",
+    collapseAria: "Shorten address",
+    emptyNote: "We post it here and on X first.",
+    liveNotePrefix: "Match it with ",
+    liveNoteLink: "our X",
+    liveNoteSuffix: " before you buy."
+  }
 };
 
 export const SOUND_COPY = {
@@ -301,17 +297,379 @@ export const SOUND_COPY = {
 
 export const EASTER_EGG_COPY = {
   wenLines: [
-    "Check the ticker.",
-    "Soon enough.",
-    "Ask me on a weekday.",
-    "Wen what.",
-    "Patience is a position."
+    "Soon.", "Ask me Monday.", "Wen what.", "Check the ticker.",
+    "Don't rush a bull."
   ],
   disclaimerToast: "Yes, it says what it says."
 };
 
 export const FOOTER_COPY = {
-  backToTop: "Back to top"
+  backToTop: "Back to top",
+  trustLine: "This site never asks you to connect a wallet."
+};
+
+// =========================================================================
+// COMPONENT UI STRINGS (MOVED OUT OF COMPONENTS)
+// =========================================================================
+export const UI_COPY = {
+  hero: {
+    sloganLine1: "THE BULLS",
+    sloganLine2: "ARE ONCHAIN.",
+    tapBullTitle: "Tap the bull"
+  },
+  buyTicket: {
+    header: "BUY TICKET",
+    buttonAria: "Buy Bull on Canton.",
+    orderStatusAria: "Order Status",
+    dismiss: "Dismiss"
+  },
+  ticker: {
+    marketOpen: "NYSE: OPEN",
+    marketClosed: "NYSE: CLOSED",
+    tzSuffix: "NYC",
+    ariaLabel: "Market Ticker"
+  },
+  charge: {
+    impactHeading: "THE IMPACT",
+    paperPrice: "PRICE: 2 SATOSHIS",
+    holdAria: "Hold to charge through the wall",
+    progressAria: "Charge Progress"
+  },
+  arrivals: {
+    yourBankSourceBy: "The Bull",
+    yourBankSourceType: "pending",
+    receiptAction: "RECEIPT ▶",
+    filterAria: "Filter arrivals",
+    boardAria: "Arrivals Board",
+    columns: {
+      status: "STATUS",
+      institution: "WHO",
+      headline: "HEADLINE",
+      date: "DATE"
+    },
+    noSourceAvailable: "No source link.",
+    printerBadge: "THE RECEIPTS",
+    verdictHeader: "VERDICT"
+  },
+  memeDesk: {
+    defaults: {
+      topText: "MARKET CLOSED",
+      bottomText: "I'M STILL WORKING",
+      frontHeadline: "BULL COMPLETES SETTLEMENT WITHOUT ASKING PERMISSION",
+      frontCaption: "The bull in a black suit, entirely unconcerned.",
+      speechText: "Per my last block."
+    },
+    frontPageVol: "VOL. XIV NO. 420. (satire)",
+    frontPageCaptionPrefix: "Fig 1.",
+    shareTitle: "BULL ON CANTON Meme",
+    dismiss: "Dismiss",
+    dragStampAria: "Draggable Stamp",
+    dragLabel: "DRAG",
+    exportPrefix: "EXPORT:",
+    renderNote: "100% PRIVATE CLIENT RENDER",
+    stepsAria: "Meme editor steps",
+    pickExpressionLabel: "Select Mascot Expression",
+    pickTemplateLabel: "Select Layout Template",
+    nextWrite: "NEXT: WRITE",
+    topCaptionLabel: "Top Caption",
+    bottomCaptionLabel: "Bottom Caption",
+    headlineLabel: "Newspaper Headline",
+    photoCaptionLabel: "Photo Caption",
+    speechBubbleLabel: "Speech Bubble Text",
+    stampLabel: "Optional Red Rubber Stamp",
+    stampSizeLabel: "STAMP SIZE:",
+    backPick: "◀ BACK: PICK",
+    nextSend: "NEXT: SEND",
+    backWrite: "◀ BACK: WRITE"
+  },
+  footer: {
+    xLabel: "X",
+    telegramLabel: "TELEGRAM",
+    disclaimerTitle: "Disclaimer"
+  }
+};
+
+export const OFFICE_COPY = {
+  heading: "THE DESK",
+  cordHint: "Pull",
+  cordAria: "Turn on the light",
+  deskLampAria: "Desk lamp",
+  coinAria: "Coin",
+  deskAlt: "Front-facing wooden office desk with a monitor showing the receipts board",
+  bullAlt: "Bull peeking over the top of the monitor",
+  watchAlt: "Framed portrait of the bull checking his watch",
+  bullReactionAlt: "Bull reaction",
+  screenTitle: "THE RECEIPTS",
+  receiptHeader: "RECEIPT",
+  back: "BACK",
+  filters: {
+    all: "ALL",
+    arrived: "ARRIVED",
+    pilot: "PILOT",
+    announced: "ANNOUNCED"
+  },
+  whoLabel: "WHO",
+  dateLabel: "SOURCE DATE",
+  postedByLabel: "POSTED BY",
+  typeLabel: "TYPE",
+  noteLabel: "NOTE",
+  viewOnX: "VIEW ON X",
+  viewSource: "VIEW SOURCE",
+  alsoReadPrefix: "ALSO READ:",
+  stampLabel: "SOURCE ATTACHED",
+  prevAria: "Previous receipt",
+  nextAria: "Next receipt",
+  screenAria: "The Receipts monitor",
+  legendButton: "?",
+  legendAria: "Status legend",
+  legendCloseAria: "Close status legend",
+  legendItems: [
+    { status: "ANNOUNCED", text: "They said it." },
+    { status: "PILOT", text: "They are testing it." },
+    { status: "ARRIVED", text: "The source says it is live." }
+  ],
+  updatedPrefix: "UPDATED",
+  monthsShort: ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+};
+
+// =========================================================================
+// END CREDITS COPY
+// =========================================================================
+export const CREDITS_COPY = {
+  triggerButton: "ROLL CREDITS",
+  triggerAria: "Roll end credits",
+  regionAria: "End credits",
+  closeAria: "Close credits",
+  muteAria: "Mute music",
+  backButton: "Back to the site",
+  playButton: "Play",
+  playAria: "Play credits",
+  pauseAria: "Pause or resume credits",
+  pausedStatus: "Credits paused",
+  resumedStatus: "Credits playing",
+  heroAlt: "The bull in a black suit",
+  smugAlt: "Smug bull",
+  title: "BULL ON CANTON",
+  subtitle: "A film about waiting.",
+  starringHeading: "STARRING",
+  starring: [
+    { name: "THE BULL", role: "as himself" },
+    { name: "THE WALL", role: "as the wall (until act two)" },
+    { name: "ANY DAY NOW", role: "as the plot" },
+    { name: "A COMMITTEE OF TWELVE", role: "as themselves" }
+  ],
+  storyHeading: "THE STORY",
+  storyLines: [
+    "For years, crypto has waited for Wall Street to come onchain.",
+    "The banks. The markets. The trillions moving through traditional finance.",
+    "Everyone said it was coming.",
+    "Now the transition is taking shape.",
+    "Canton Network is building the infrastructure to bring financial institutions, markets and real-world assets onchain.",
+    "Major banks and market operators are already involved. Real use cases are starting to appear.",
+    "The Wall Street bull has always stood for traditional finance.",
+    "So we gave him a new home.",
+    "The bull is Wall Street. Canton is where Wall Street is moving.",
+    "A bull in a business suit, standing for the institutions, the capital and the markets making their way onchain.",
+    "If the institutions are coming onchain, the bull has to be there too.",
+    "BULL ON CANTON is launching on Canton.",
+    "The bulls are on Canton. The bulls are onchain. And more are coming."
+  ],
+  crewHeading: "CREW",
+  crew: [
+    "Suit: pressed",
+    "Horns: two",
+    "Pin: C",
+    "Coffee: +800%",
+    "Saturdays: closed. The bull: not."
+  ],
+  thanksHeading: "SPECIAL THANKS",
+  thanksText: "Every meeting that could have been a block.",
+  locationHeading: "FILMED ON LOCATION",
+  locationText: "Wall Street (closed on weekends)",
+  smallPrint: "An independent community meme. Not affiliated with Canton or any institution. We are turning one of crypto's biggest stories into a character.",
+  musicCredit: "",
+  disclaimer: DISCLAIMER,
+  finalTitle: "THE BULLS ARE ONCHAIN.",
+  finalSubtitle: "Wall Street has a new home."
+};
+
+// =========================================================================
+// PLAY PAGE & STICKY BUTTON COPY
+// =========================================================================
+export const PLAY_COPY = {
+  button: "PLAY",
+  stickyAria: "Play the game, coming soon",
+  backButton: "BACK",
+  backAria: "Go back",
+  bullAlt: "The suited bull riding a charging bronze bull",
+  heading: "BULL RUN",
+  subtitle: "Outrun the bear.",
+  comingSoon: {
+    stamp: "COMING SOON",
+    message: "Bull Run is almost ready.",
+    xLabel: "X",
+    telegramLabel: "TELEGRAM",
+    xAria: "Follow on X",
+    telegramAria: "Join on Telegram"
+  },
+  tapToPlay: "TAP TO PLAY",
+  howTo: "Tap above deck or JUMP to leap. Hold DODGE to duck.",
+  jumpLegend: "JUMP (tap)",
+  dodgeLegend: "DODGE (hold)",
+  jumpLabel: "JUMP",
+  dodgeLabel: "DODGE",
+  chargeButtonLabel: "CHARGE",
+  jumpAria: "Jump",
+  dodgeAria: "Hold to dodge",
+  chargeAria: "Trigger charge",
+  pauseAria: "Pause game",
+  bestLabel: "BEST",
+  scoreLabel: "SCORE",
+  coinsLabel: "COINS",
+  rankLabel: "RANK",
+  followLine: "Follow on X",
+  xAria: "Follow on X",
+  dailyRunLabel: "DAILY RUN",
+  dailyRunDesc: "Same seed for everyone today.",
+  dailyRunTag: "DAILY RUN",
+  locationsHeading: "LOCATION",
+  locationLocked: "Unlocks at {score}",
+  locations: [
+    {
+      id: "wallStreet",
+      name: "WALL STREET, NIGHT",
+      note: "Bronze lamps and late blocks.",
+      unlockScore: 0
+    },
+    {
+      id: "bearStorm",
+      name: "BEAR MARKET STORM",
+      note: "Red rain and extra overhead.",
+      unlockScore: 2500
+    },
+    {
+      id: "cantonDawn",
+      name: "CANTON DAWN",
+      note: "Warm dawn and more coins.",
+      unlockScore: 6000
+    }
+  ],
+  ranks: [
+    { minScore: 0, label: "Intern" },
+    { minScore: 600, label: "Analyst" },
+    { minScore: 1800, label: "Associate" },
+    { minScore: 4000, label: "VP" },
+    { minScore: 8000, label: "Managing Director" },
+    { minScore: 15000, label: "The Bull" }
+  ],
+  freeUnlocks: [
+    { minScore: 600, id: "bronzeDust", label: "Bronze dust" },
+    { minScore: 1800, id: "greenCandle", label: "Green candle trail" },
+    { minScore: 4000, id: "coinBurst", label: "Charge coin burst" },
+    { minScore: 8000, id: "creamOutline", label: "Cream outline" },
+    { minScore: 15000, id: "bronzeStreak", label: "Bronze streak" }
+  ],
+  unlocksHeading: "UNLOCKS",
+  noUnlocksYet: "Run to unlock cosmetics.",
+  goText: "GO",
+  firstJumpHint: "TAP",
+  bearLabel: "BEAR",
+  chargeLabel: "CHARGE",
+  secondWindLabel: "SECOND WIND",
+  secondWindUsed: "SHIELD USED",
+  perfectPopup: "PERFECT",
+  closePopup: "CLOSE",
+  shieldPopup: "SHIELD",
+  magnetPopup: "MAGNET",
+  chargePopup: "CHARGE",
+  pausedTitle: "PAUSED",
+  pausedPrompt: "PAUSED, tap resume to continue",
+  resumeButton: "RESUME",
+  quitButton: "QUIT",
+  canvasAria: "Bull Run game canvas",
+  caughtTitle: "CAUGHT.",
+  newBestBadge: "New best",
+  runAgainButton: "RUN AGAIN",
+  changeLocationButton: "CHANGE LOCATION",
+  breakdownDistance: "Distance",
+  breakdownCoins: "Coins x Combo",
+  breakdownClose: "Close calls",
+  breakdownPerfect: "Perfect arcs",
+  openLeague: "OPEN LEAGUE",
+  herdLeague: "HERD LEAGUE",
+  weeklyHeading: "WEEKLY CHALLENGE",
+  challengeBeaten: "Challenge beaten",
+  herdPass: {
+    heading: "HERD PASS",
+    haveCodeButton: "I have a code",
+    locked: "Locked",
+    unlocked: "Active",
+    expiredNote: "Season ended.",
+    tiers: [
+      {
+        id: "herd",
+        name: "HERD",
+        preview: "Gold outline, gold dust trail, gold share frame"
+      },
+      {
+        id: "bull",
+        name: "BULL",
+        preview: "Gold bronze bull, Second wind shield"
+      },
+      {
+        id: "alpha",
+        name: "ALPHA",
+        preview: "Green candle trail, Alpha share stamp"
+      }
+    ],
+    telegramNotePrefix: "Codes are given out in the Herd Room on Telegram.",
+    telegramLinkText: "Open Telegram",
+    noWalletNote: "This site never asks you to connect a wallet.",
+    sheetTitle: "ENTER HERD CODE",
+    codePlaceholder: "Paste code",
+    codeInputLabel: "Herd Pass code",
+    submitCode: "UNLOCK",
+    closeSheet: "Cancel",
+    invalidCode: "Code not recognized for this season.",
+    seasonEndedError: "Current season has ended.",
+    rateLimited: "Too many tries. Wait {seconds} seconds.",
+    codeAccepted: "Pass unlocked."
+  },
+  shareCard: {
+    titlePrefix: "OUTRAN THE BEAR FOR",
+    watermark: "BULL ON CANTON",
+    runCodePrefix: "RUN",
+    alphaStampSuffix: "ALPHA",
+    shareButton: "SHARE CARD",
+    postXButton: "POST ON X",
+    xPostTemplate: "Outran the bear for {score}. Rank: {rank}. {ticker}",
+    xAttachNote: "Save the card first, then attach the image to your post on X.",
+    preparingCard: "Building card...",
+    cardSavedStatus: "Share card downloaded.",
+    cardSharedStatus: "Share card ready.",
+    cardErrorStatus: "Could not build share card.",
+    iosSheetInstruction: "Press and hold the image, then tap Save to Photos.",
+    iosSheetClose: "Close",
+    iosSheetAlt: "Bull Run score share card"
+  },
+  debugAnim: {
+    toggleLabel: "ANIM TUNE",
+    collapseLabel: "Hide",
+    expandLabel: "Open",
+    saddleX: "Saddle X",
+    saddleY: "Saddle Y",
+    scaleMult: "Scale",
+    poseHeading: "Pose offset",
+    poseX: "Pose X",
+    poseY: "Pose Y",
+    springK: "Spring K",
+    springC: "Spring C",
+    showSaddle: "Show saddle points",
+    showHitbox: "Show hitbox",
+    copyButton: "Copy settings",
+    copiedButton: "Copied",
+    resetButton: "Reset"
+  }
 };
 
 

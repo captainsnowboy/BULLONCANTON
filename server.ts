@@ -21,6 +21,11 @@ app.use(
   })
 );
 
+// Serve the separate Play page before the SPA catch-all
+app.get(['/play', '/play/'], (_req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'play', 'index.html'));
+});
+
 // Fallback to index.html for SPA client-side routing
 app.get('*', (_req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));

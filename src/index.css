@@ -1,11 +1,14 @@
 @import "tailwindcss";
 @import "@fontsource/anton/400.css";
+@import "@fontsource/bangers/latin-400.css";
 @import "@fontsource/playfair-display/400.css";
 @import "@fontsource/playfair-display/700.css";
+@import "@fontsource/playfair-display/900.css";
 @import "@fontsource/ibm-plex-mono/400.css";
 @import "@fontsource/ibm-plex-mono/600.css";
 
 :root {
+  --ink: #0E0D0C;
   --color-ink: #0E0D0C;
   --color-bronze: #C97B1A;
   --color-gold: #F2B24A;
@@ -14,14 +17,91 @@
   --color-ticker-green: #2FD27A;
 }
 
+html {
+  background-color: var(--ink);
+  overflow-x: clip;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
-  background-color: #000000;
+  background-color: var(--ink);
   color: var(--color-newsprint);
   font-family: 'IBM Plex Mono', monospace;
   overflow-x: clip;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   margin: 0;
   padding: 0;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Desk scene full-screen stage: stays min-height 100lvh (with 100vh fallback) */
+.section-fullscreen {
+  min-height: 100vh;
+  min-height: 100lvh;
+}
+
+/* Join bridge between The Charge and the desk scene (sole gap; no halftone, grain, or borders) */
+.charge-desk-bridge {
+  position: relative;
+  z-index: 20;
+  width: 100%;
+  height: clamp(40px, 7svh, 72px);
+  background-color: var(--ink);
+  border: 0;
+  margin: 0;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.office-stage {
+  margin-top: 0;
+  padding-top: 0;
+  background-color: var(--ink);
+}
+
+/* iOS Safari-only Charge & Desk spacing rules (scoped via html.ios-safari in main.tsx) */
+.ios-safari .charge-section {
+  height: auto !important;
+  min-height: 0 !important;
+  padding-bottom: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+.ios-safari .charge-desk-bridge {
+  height: clamp(32px, 5svh, 56px);
+}
+
+.ios-safari .charge-inner-frame {
+  height: calc(100svh - clamp(24px, 7vh, 72px) - var(--ticker-h, 40px)) !important;
+}
+
+.ios-safari .charge-controls-row {
+  padding-bottom: 20px !important;
+}
+
+.ios-safari .office-stage {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+  min-height: 100vh;
+  min-height: 100lvh;
+}
+
+/* Office scene inner desk/floor vertical anchoring inside 100lvh stage using svh bounds */
+.office-world {
+  --floor-h: 24%;
+  --floor-h: max(24%, calc(100% - 76svh));
+}
+
+/* Eliminate 300ms delay & double-tap zoom on interactive controls */
+button,
+a,
+[role="button"],
+input[type="button"],
+input[type="submit"],
+summary {
+  touch-action: manipulation;
 }
 
 .font-anton {
@@ -44,16 +124,31 @@ body {
   pointer-events: none;
 }
 
-/* Comic film grain filter */
+/* Static tiny noise tile (128px repeating data URI, zero GPU SVG filter overhead) */
 .comic-grain {
   position: fixed;
   inset: 0;
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
   opacity: 0.04;
-  z-index: 99;
+  z-index: 15;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 128 128' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 128px 128px;
+  background-repeat: repeat;
 }
+
+.comic-grain-local {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 128 128' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 128px 128px;
+  background-repeat: repeat;
+}
+
 
 /* Mask to softly fade edges of bull image into pure black (#000000) */
 .bull-mask {
@@ -98,3 +193,96 @@ body {
     opacity: 1 !important;
   }
 }
+
+/* Slim bronze scrollbar inside MonitorScreen */
+.monitor-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #C97B1A #0E0D0C;
+}
+.monitor-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.monitor-scroll::-webkit-scrollbar-track {
+  background: #0E0D0C;
+}
+.monitor-scroll::-webkit-scrollbar-thumb {
+  background: #C97B1A;
+}
+.monitor-scroll::-webkit-scrollbar-thumb:hover {
+  background: #F2B24A;
+}
+
+@keyframes firstRowPulse2 {
+  0%, 100% {
+    background-color: rgba(242, 178, 74, 0.08);
+  }
+  25%, 75% {
+    background-color: rgba(242, 178, 74, 0.26);
+  }
+  50% {
+    background-color: rgba(242, 178, 74, 0.08);
+  }
+}
+
+.monitor-row-pulse-2 {
+  animation: firstRowPulse2 650ms ease-in-out 1;
+}
+
+@keyframes hornRestPulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.horn-rest-pulse {
+  animation: hornRestPulse 1.4s ease-in-out infinite;
+}
+
+/* Desktop-only rules: mobile/touch viewports never match (min-width: 1024px) and (pointer: fine) */
+@media (min-width: 1024px) and (pointer: fine) {
+  html {
+    scrollbar-gutter: stable;
+  }
+
+  html:has(.play-page) {
+    scrollbar-gutter: auto;
+    overflow: hidden;
+  }
+
+  .monitor-scroll {
+    overscroll-behavior: contain;
+  }
+
+  @media (max-height: 940px) {
+    .hero-section {
+      padding-top: 0.75rem;
+      padding-bottom: 3.75rem;
+    }
+
+    .hero-slogan {
+      font-size: clamp(2.75rem, 6.2svh, 5rem);
+      margin-top: 0.25rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .hero-bull-stage {
+      width: clamp(250px, 42svh, 460px);
+      height: clamp(250px, 42svh, 460px);
+    }
+
+    .hero-buy-wrap {
+      margin-top: 0.25rem;
+    }
+
+    .hero-buy-wrap .buy-cta {
+      padding-top: 0.65rem;
+      padding-bottom: 0.65rem;
+      font-size: 1.875rem;
+    }
+  }
+}
+

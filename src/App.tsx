@@ -1,20 +1,39 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Hero } from './components/Hero';
 import { Charge } from './sections/Charge';
-import { Arrivals } from './sections/Arrivals';
+import { OfficeScene } from './sections/OfficeScene';
 import { MemeDesk } from './sections/MemeDesk';
 import { Herd } from './sections/Herd';
 import { Footer } from './components/Footer';
+import { Credits, startCreditsMusic } from './components/Credits';
+import { DebugHeightsPanel } from './components/DebugHeightsPanel';
 import { TickerTape } from './components/TickerTape';
+import { PlayButton } from './components/PlayButton';
 import { SoundToggle } from './components/SoundToggle';
 import { Toast } from './components/Toast';
 import { showToast } from './utils/toast';
 import { triggerStampede } from './utils/stampede';
 import { EASTER_EGG_COPY } from './copy.js';
+import { initTapFx } from './utils/tapFx';
+import { initAudioUnlock } from './utils/audio';
 
 export default function App() {
+  const [isCreditsOpen, setIsCreditsOpen] = useState(false);
+  const [showDebugHeights] = useState(() =>
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('debug') === 'heights'
+  );
   const wenIndexRef = useRef(0);
   const keyBufferRef = useRef('');
+
+  useEffect(() => {
+    const cleanupTapFx = initTapFx();
+    const cleanupAudio = initAudioUnlock();
+    return () => {
+      cleanupTapFx();
+      cleanupAudio();
+    };
+  }, []);
 
   // Global Easter Eggs: typing "wen" or "bull" anywhere on the page
   useEffect(() => {
@@ -52,22 +71,12 @@ export default function App() {
   }, []);
 
   return (
-    <div className="relative min-h-screen bg-black text-[#E8DFC9] flex flex-col selection:bg-[#C97B1A] selection:text-black">
+    <div className="relative min-h-screen bg-[var(--ink)] text-[#E8DFC9] flex flex-col selection:bg-[#C97B1A] selection:text-black">
       {/* Halftone texture dots */}
       <div className="fixed inset-0 halftone-overlay z-10 pointer-events-none opacity-40" />
 
-      {/* Comic Film Grain SVG Overlay */}
-      <svg className="comic-grain" xmlns="http://www.w3.org/2000/svg">
-        <filter id="noiseFilter">
-          <feTurbulence
-            type="fractalNoise"
-            baseFrequency="0.8"
-            numOctaves="3"
-            stitchTiles="stitch"
-          />
-        </filter>
-        <rect width="100%" height="100%" filter="url(#noiseFilter)" />
-      </svg>
+      {/* Static Film Grain (Pre-rendered 128px tile, zero runtime SVG filter) */}
+      <div className="comic-grain pointer-events-none" />
 
       {/* Unified Fixed Corner Sound Toggle (Top-Right) */}
       <SoundToggle />
@@ -75,15 +84,30 @@ export default function App() {
       {/* Shared Global Toast Notification */}
       <Toast />
 
-      {/* Main Content: Hero, The Charge, The Arrivals Board, The Meme Desk, Join The Herd, and Footer */}
+      {/* Main Content: Hero, The Charge, The Desk (Receipts Monitor), The Meme Desk, Join The Herd, and Footer */}
       <main className="relative z-20 flex-1 flex flex-col">
         <Hero />
         <Charge />
-        <Arrivals />
+        <div className="charge-desk-bridge" aria-hidden="true" />
+        <OfficeScene />
         <MemeDesk />
-        <Herd />
+        <Herd
+          onOpenCredits={() => {
+            startCreditsMusic();
+            setIsCreditsOpen(true);
+          }}
+        />
         <Footer />
       </main>
+
+      {/* Optional End Credits Overlay */}
+      <Credits isOpen={isCreditsOpen} onClose={() => setIsCreditsOpen(false)} />
+
+      {/* Live viewport & section heights debug overlay (?debug=heights) */}
+      {showDebugHeights && <DebugHeightsPanel />}
+
+      {/* Fixed bottom-left Play shortcut pill */}
+      <PlayButton isCreditsOpen={isCreditsOpen} />
 
       {/* Fixed bottom scrolling ticker tape */}
       <TickerTape />

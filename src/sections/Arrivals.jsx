@@ -1,10 +1,19 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { ExternalLink, X, ArrowUpDown } from 'lucide-react';
+import { gsap } from 'gsap';
 import rawArrivalsData from '../data/arrivals.json';
-import { ARRIVALS_COPY } from '../copy.js';
+import { ARRIVALS_COPY, UI_COPY } from '../copy.js';
 import { X_URL } from '../config.js';
 import { playFlipClickSound } from '../utils/audio';
 import { Reveal } from '../components/Reveal';
+
+// =========================================================================
+// ENTRANCE & TRANSITION CONSTANTS
+// =========================================================================
+export const LIGHTS_ON_THRESHOLD = 0.25; // 25% visible
+export const LIGHTS_ON_DURATION = 0.7; // 700ms
+export const LIGHTS_ON_LINE_COLOR = '#C97B1A';
+export const LIGHTS_ON_FALLBACK_MS = 2000;
 
 const CHAR_SET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/. ';
 
@@ -75,6 +84,9 @@ export const Arrivals = () => {
 
   const sectionRef = useRef(null);
   const boardListRef = useRef(null);
+  const sweepLineRef = useRef(null);
+  const [showSweepLine, setShowSweepLine] = useState(false);
+  const hasTriggeredLightsOnRef = useRef(false);
   const touchStartYRef = useRef(null);
   const printTimersRef = useRef([]);
 
@@ -142,8 +154,8 @@ export const Arrivals = () => {
       date: item.date,
       reaction: item.reaction,
       source: null,
-      sourceBy: 'Canton Community',
-      sourceType: 'deliberation',
+      sourceBy: UI_COPY.arrivals.yourBankSourceBy,
+      sourceType: UI_COPY.arrivals.yourBankSourceType,
       isYourBank: true,
       placeholder: false,
     };
@@ -315,24 +327,94 @@ export const Arrivals = () => {
     };
   }, [isMobileSheetOpen]);
 
-  // IntersectionObserver to trigger split-flap flip on view
+  // "Lights on" Entrance: panel starts hidden with clip-path inset(0 0 100% 0).
+  // When section is 25% visible, thin bronze line sweeps down (700ms, ease-out)
+  // while clip-path opens to inset(0). Then existing split-flap text and rows play.
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setInView(true);
-          observer.disconnect();
-        }
-      },
-      { threshold: 0.15 }
-    );
+    if (!sectionRef.current) return;
 
-    if (sectionRef.current) {
-      observer.observe(sectionRef.current);
+    if (reducedMotion) {
+      if (boardListRef.current) {
+        boardListRef.current.style.clipPath = 'inset(0)';
+        boardListRef.current.style.webkitClipPath = 'inset(0)';
+      }
+      setShowSweepLine(false);
+      setInView(true);
+      return;
     }
 
-    return () => observer.disconnect();
-  }, []);
+    // Set initial clip-path if entrance hasn't run yet
+    if (boardListRef.current && !hasTriggeredLightsOnRef.current) {
+      boardListRef.current.style.clipPath = 'inset(0 0 100% 0)';
+      boardListRef.current.style.webkitClipPath = 'inset(0 0 100% 0)';
+    }
+
+    const triggerLightsOn = () => {
+      if (hasTriggeredLightsOnRef.current) return;
+      hasTriggeredLightsOnRef.current = true;
+
+      setShowSweepLine(true);
+      const panel = boardListRef.current;
+      const line = sweepLineRef.current;
+
+      const clipObj = { bottomInset: 100 };
+      gsap.to(clipObj, {
+        bottomInset: 0,
+        duration: LIGHTS_ON_DURATION,
+        ease: 'power2.out',
+        onUpdate: () => {
+          if (panel) {
+            const val = `inset(0 0 ${clipObj.bottomInset}% 0)`;
+            panel.style.clipPath = val;
+            panel.style.webkitClipPath = val;
+          }
+          if (line) {
+            line.style.top = `${100 - clipObj.bottomInset}%`;
+          }
+        },
+        onComplete: () => {
+          if (panel) {
+            panel.style.clipPath = 'inset(0)';
+            panel.style.webkitClipPath = 'inset(0)';
+          }
+          setShowSweepLine(false);
+          setInView(true);
+        },
+      });
+    };
+
+    // 2-second fallback safety: ensure visible even if trigger fails
+    const fallbackTimer = window.setTimeout(() => {
+      if (!hasTriggeredLightsOnRef.current) {
+        hasTriggeredLightsOnRef.current = true;
+        if (boardListRef.current) {
+          boardListRef.current.style.clipPath = 'inset(0)';
+          boardListRef.current.style.webkitClipPath = 'inset(0)';
+        }
+        setShowSweepLine(false);
+        setInView(true);
+      }
+    }, LIGHTS_ON_FALLBACK_MS);
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.intersectionRatio >= LIGHTS_ON_THRESHOLD || entry.isIntersecting) {
+            triggerLightsOn();
+            observer.disconnect();
+          }
+        });
+      },
+      { threshold: [LIGHTS_ON_THRESHOLD] }
+    );
+
+    observer.observe(sectionRef.current);
+
+    return () => {
+      window.clearTimeout(fallbackTimer);
+      observer.disconnect();
+    };
+  }, [reducedMotion]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -370,7 +452,7 @@ export const Arrivals = () => {
       id="arrivals"
       className="relative w-full bg-black text-[#E8DFC9] px-3 sm:px-6 border-t-2 border-[#C97B1A]/40 select-none pb-24 scroll-mt-12"
       style={{
-        paddingTop: 'clamp(24px, 6dvh, 64px)',
+        paddingTop: 'clamp(24px, 6svh, 64px)',
         scrollMarginTop: 'clamp(32px, 5vh, 64px)',
       }}
     >
@@ -380,12 +462,6 @@ export const Arrivals = () => {
         {/* ============================================================= */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between border-b-2 border-[#F2B24A] pb-4 mb-5 gap-3">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="w-2.5 h-2.5 bg-[#F2B24A] rotate-45 inline-block" />
-              <span className="font-plex text-xs font-bold tracking-widest text-[#F2B24A] uppercase">
-                ONCHAIN DIRECTORY
-              </span>
-            </div>
             <Reveal variant="stamp">
               <h2 className="font-anton text-3xl sm:text-5xl tracking-wide text-white uppercase inline-block">
                 {ARRIVALS_COPY.title}
@@ -428,13 +504,13 @@ export const Arrivals = () => {
                 <span className="font-plex font-bold text-xs sm:text-sm text-white shrink-0">
                   {currentBoardingRow.institution}
                 </span>
-                <span className="text-[#E8DFC9]/40 hidden sm:inline">—</span>
+                <span className="text-[#E8DFC9]/40 hidden sm:inline">.</span>
                 <span className="font-plex text-xs text-[#E8DFC9]/80 truncate">
                   {currentBoardingRow.headline}
                 </span>
               </div>
               <span className="font-plex text-[10px] sm:text-xs text-[#F2B24A] group-hover:text-white uppercase font-bold shrink-0 ml-2">
-                RECEIPT ▶
+                {UI_COPY.arrivals.receiptAction}
               </span>
             </button>
           </div>
@@ -454,7 +530,7 @@ export const Arrivals = () => {
               <div
                 className="flex items-center gap-1.5 overflow-x-auto py-1"
                 role="group"
-                aria-label="Filter arrivals"
+                aria-label={UI_COPY.arrivals.filterAria}
               >
                 {['ALL', 'ARRIVED', 'PILOT', 'ANNOUNCED'].map((filterKey) => {
                   const isCurrent = activeFilter === filterKey;
@@ -509,17 +585,24 @@ export const Arrivals = () => {
             </div>
 
             {/* Board Main Frame */}
-            <div
-              ref={boardListRef}
-              className="bg-[#0E0D0C] border-2 sm:border-3 border-[#F2B24A]/50 shadow-[6px_6px_0_#0E0D0C] overflow-hidden"
-              role="grid"
-              aria-label="Arrivals Board"
-            >
+            <div className="relative">
+              <div
+                ref={boardListRef}
+                className="bg-[#0E0D0C] border-2 sm:border-3 border-[#F2B24A]/50 shadow-[6px_6px_0_#0E0D0C] overflow-hidden"
+                style={{
+                  clipPath: reducedMotion ? 'inset(0)' : 'inset(0 0 100% 0)',
+                  WebkitClipPath: reducedMotion ? 'inset(0)' : 'inset(0 0 100% 0)',
+                  willChange: 'clip-path',
+                }}
+                role="grid"
+                aria-label={UI_COPY.arrivals.boardAria}
+              >
               {/* Desktop Table Header */}
               <div className="hidden md:grid grid-cols-12 gap-3 px-5 py-2.5 bg-black border-b border-[#F2B24A]/30 text-[11px] font-plex text-[#F2B24A] uppercase tracking-wider font-bold">
-                <div className="col-span-3">STATUS</div>
-                <div className="col-span-4">INSTITUTION</div>
-                <div className="col-span-5 text-right">DATE / DETAILS</div>
+                <div className="col-span-2">{UI_COPY.arrivals.columns.status}</div>
+                <div className="col-span-3">{UI_COPY.arrivals.columns.institution}</div>
+                <div className="col-span-5">{UI_COPY.arrivals.columns.headline}</div>
+                <div className="col-span-2 text-right">{UI_COPY.arrivals.columns.date}</div>
               </div>
 
               {/* Rows List */}
@@ -560,6 +643,20 @@ export const Arrivals = () => {
                 />
               </div>
             </div>
+
+            {/* Thin bronze line sweeping down during entrance */}
+            {showSweepLine && (
+              <div
+                ref={sweepLineRef}
+                className="absolute left-0 right-0 h-[2px] pointer-events-none z-30"
+                style={{
+                  top: 0,
+                  backgroundColor: LIGHTS_ON_LINE_COLOR,
+                  boxShadow: '0 0 8px #F2B24A, 0 0 3px #FFF',
+                }}
+              />
+            )}
+          </div>
 
             {/* Legal Disclaimer & Submission Prompt */}
             <div className="mt-4 pt-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-[11px] font-plex text-[#E8DFC9]/60">
@@ -613,7 +710,7 @@ export const Arrivals = () => {
 
             {/* Sheet Card */}
             <div
-              className="relative w-full max-h-[75dvh] bg-[#0E0D0C] border-t-3 border-[#F2B24A] rounded-t-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-250"
+              className="relative w-full max-h-[85svh] bg-[#0E0D0C] border-t-3 border-[#F2B24A] rounded-t-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-250"
               onTouchStart={(e) => {
                 touchStartYRef.current = e.touches[0].clientY;
               }}
@@ -645,8 +742,8 @@ export const Arrivals = () => {
                       <img
                         src={
                           activeReceiptRow?.isYourBank
-                            ? '/assets/bull-browraise.png'
-                            : '/assets/bull-smug.png'
+                            ? '/assets/bull-browraise.webp'
+                            : '/assets/bull-smug.webp'
                         }
                         alt="Bull reaction"
                         width={80}
@@ -671,8 +768,8 @@ export const Arrivals = () => {
                 </div>
               </div>
 
-              {/* Sheet Body: Stepped Receipt Printer */}
-              <div className="p-4 overflow-y-auto">
+              {/* Sheet Body: Stepped Receipt Printer (scrolls inside itself when content is long) */}
+              <div className="flex-1 overflow-y-auto p-3 sm:p-4 min-h-0">
                 <ReceiptPrinter
                   row={activeReceiptRow}
                   isTearing={isTearing}
@@ -682,8 +779,16 @@ export const Arrivals = () => {
                   isXLink={isXLink}
                   getStatusStyle={getStatusStyle}
                   isMobileSheet={true}
+                  hideButtons={true}
                 />
               </div>
+
+              {/* Sheet Footer: Action buttons stay visible at bottom of sheet */}
+              {!activeReceiptRow?.isYourBank && (
+                <div className="shrink-0 p-3 bg-[#12100E] border-t border-[#F2B24A]/30 z-30">
+                  <ReceiptButtonsRow row={activeReceiptRow} isXLink={isXLink} isMobile={true} />
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -714,7 +819,7 @@ const ArrivalBoardRow = ({
       role="row"
       aria-selected={isSelected}
       onClick={onSelect}
-      className={`relative w-full text-left p-3.5 sm:px-5 sm:py-3.5 transition-all outline-none cursor-pointer min-h-[48px] flex flex-col md:grid md:grid-cols-12 gap-2 md:gap-3 items-start md:items-center ${
+      className={`relative w-full text-left p-3.5 sm:px-5 sm:py-3.5 transition-all outline-none cursor-pointer min-h-[48px] flex flex-col md:grid md:grid-cols-12 gap-1.5 md:gap-3 items-start md:items-center ${
         isSelected
           ? 'bg-[#181614] shadow-[inset_0_0_12px_rgba(242,178,74,0.12)]'
           : isSpecial
@@ -730,8 +835,8 @@ const ArrivalBoardRow = ({
         />
       )}
 
-      {/* Status (col 3 on desktop) */}
-      <div className="w-full md:w-auto md:col-span-3 flex items-center justify-between md:justify-start gap-2">
+      {/* Status (col 2 on desktop) */}
+      <div className="w-full md:w-auto md:col-span-2 flex items-center justify-between md:justify-start gap-2">
         <div className="flex items-center gap-1.5">
           {isSelected && (
             <span className="text-[#F2B24A] text-xs font-bold font-mono shrink-0 animate-pulse">
@@ -753,28 +858,83 @@ const ArrivalBoardRow = ({
         </div>
 
         {/* Mobile-only date display */}
-        <span className="md:hidden font-plex text-xs text-[#E8DFC9]/60">{row.date}</span>
+        <span className="md:hidden font-plex text-xs text-[#E8DFC9]/60 shrink-0">{row.date}</span>
       </div>
 
-      {/* Institution (col 4 on desktop) */}
+      {/* Institution (col 3 on desktop) */}
       <div
-        className={`w-full md:w-auto md:col-span-4 font-plex font-bold text-sm sm:text-base truncate ${
+        className={`w-full md:w-auto md:col-span-3 font-plex font-bold text-sm sm:text-base truncate ${
           isSpecial ? 'text-[#F2B24A]' : 'text-white'
         }`}
       >
         {flipInstitution}
       </div>
 
-      {/* Date & Details / Headline teaser (col 5 on desktop) */}
-      <div className="w-full md:w-auto md:col-span-5 flex items-center justify-between md:justify-end gap-3 text-right">
-        <span className="font-plex text-xs text-[#E8DFC9]/70 truncate max-w-[200px] text-left md:text-right hidden sm:inline">
-          {row.headline}
-        </span>
-        <span className="hidden md:inline font-plex text-xs text-[#E8DFC9]/70 shrink-0">
-          {row.date}
-        </span>
+      {/* Headline (single line, truncated with an ellipsis) (col 5 on desktop) */}
+      <div className="w-full md:w-auto md:col-span-5 font-plex text-xs text-[#E8DFC9]/75 truncate">
+        {row.headline}
+      </div>
+
+      {/* Date (col 2 on desktop) */}
+      <div className="hidden md:block md:col-span-2 text-right font-plex text-xs text-[#E8DFC9]/70 shrink-0">
+        {row.date}
       </div>
     </button>
+  );
+};
+
+// =========================================================================
+// RECEIPT ACTION BUTTONS (VIEW ON X + ALSO READ)
+// =========================================================================
+const ReceiptButtonsRow = ({ row, isXLink, isMobile = false }) => {
+  if (!row || row.isYourBank) return null;
+
+  const hasValidSource = typeof row.source === 'string' && row.source.startsWith('https://');
+  const hasValidAlsoRead =
+    row.alsoRead &&
+    typeof row.alsoRead.url === 'string' &&
+    row.alsoRead.url.startsWith('https://');
+
+  if (!hasValidSource && !hasValidAlsoRead) {
+    return (
+      <div className="text-center text-[10px] font-plex text-black/50 italic py-1">
+        {UI_COPY.arrivals.noSourceAvailable}
+      </div>
+    );
+  }
+
+  return (
+    <div className={`w-full flex items-center gap-2 ${isMobile ? 'justify-between' : ''}`}>
+      {/* Primary: VIEW ON X */}
+      {hasValidSource && (
+        <a
+          href={row.source}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 bg-[#F2B24A] hover:bg-[#ffc463] text-black font-plex font-bold text-xs uppercase py-2 px-2.5 border-2 border-black shadow-[2px_2px_0_#000] active:translate-y-0.5 transition-all min-h-[40px] cursor-pointer text-center"
+        >
+          <span className="truncate">
+            {isXLink(row.source) ? ARRIVALS_COPY.buttonText.x : ARRIVALS_COPY.buttonText.source}
+          </span>
+          <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+        </a>
+      )}
+
+      {/* Second, smaller button: ALSO READ: <label> */}
+      {hasValidAlsoRead && (
+        <a
+          href={row.alsoRead.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex-1 min-w-0 inline-flex items-center justify-center gap-1 bg-[#FFFDF7] hover:bg-[#E8DFC9] text-black font-plex font-bold text-[10px] sm:text-xs uppercase py-1.5 px-2 border-2 border-black shadow-[2px_2px_0_#000] active:translate-y-0.5 transition-all min-h-[40px] cursor-pointer text-center"
+        >
+          <span className="truncate">
+            {ARRIVALS_COPY.printer.alsoReadLabel}: {row.alsoRead.label}
+          </span>
+          <ExternalLink className="w-3 h-3 shrink-0" />
+        </a>
+      )}
+    </div>
   );
 };
 
@@ -790,6 +950,7 @@ const ReceiptPrinter = ({
   isXLink,
   getStatusStyle,
   isMobileSheet = false,
+  hideButtons = false,
 }) => {
   if (!row) {
     return (
@@ -805,18 +966,16 @@ const ReceiptPrinter = ({
       case 0:
         return 'max-h-0 opacity-0 overflow-hidden';
       case 1:
-        return 'max-h-32 opacity-100 overflow-hidden';
+        return 'max-h-36 opacity-100 overflow-hidden';
       case 2:
-        return 'max-h-64 opacity-100 overflow-hidden';
+        return 'max-h-72 opacity-100 overflow-hidden';
       case 3:
-        return 'max-h-96 opacity-100 overflow-hidden';
+        return 'max-h-[480px] opacity-100 overflow-hidden';
       case 4:
       default:
-        return 'max-h-[850px] opacity-100';
+        return 'max-h-[1400px] opacity-100';
     }
   };
-
-  const hasValidLink = row.source && row.source.startsWith('https://');
 
   return (
     <div className="w-full flex flex-col items-center">
@@ -834,7 +993,7 @@ const ReceiptPrinter = ({
             />
             <span>{ARRIVALS_COPY.printer.slotLabel}</span>
           </div>
-          <span className="text-[#F2B24A]/80">CANTON DIRECTORY</span>
+          <span className="text-[#F2B24A]/80">{UI_COPY.arrivals.printerBadge}</span>
         </div>
 
         {/* The Slot Mouth: Narrow dark recessed opening */}
@@ -859,74 +1018,78 @@ const ReceiptPrinter = ({
               fontFamily: '"IBM Plex Mono", monospace, monospace',
             }}
           >
-            {/* Perforated tear top line */}
-            <div className="border-b-2 border-dashed border-black/40 pb-2 mb-3 text-center">
-              <div className="font-anton text-xs sm:text-sm tracking-widest uppercase text-black">
-                ★ {ARRIVALS_COPY.printer.verifiedHeader} ★
+            {/* 1. Header & Source Date */}
+            <div className="border-b-2 border-dashed border-black/40 pb-2 mb-2.5">
+              <div className="flex items-center justify-between text-[9px] font-plex text-black/60 tracking-wider uppercase mb-1">
+                <span className="font-anton text-xs sm:text-sm tracking-wider uppercase text-black">
+                  ★ {ARRIVALS_COPY.printer.verifiedHeader} ★
+                </span>
+                <span className="font-mono text-[9px]">#CANT-{row.id.slice(-6).toUpperCase()}</span>
               </div>
-              <div className="text-[9px] font-plex text-black/60 tracking-wider uppercase mt-0.5">
-                LEDGER REF: #CANT-{row.id.slice(-6).toUpperCase()}
+              <div className="flex items-center justify-between text-[10px] font-plex text-black/80 pt-1.5 border-t border-black/15">
+                <span className="text-[9px] font-bold text-black/50 uppercase tracking-wider">
+                  {ARRIVALS_COPY.printer.dateLabel}
+                </span>
+                <span className="font-mono font-bold text-black">{row.date}</span>
               </div>
             </div>
 
-            {/* Red Stamp Overlay: "SOURCE ATTACHED" (Lands at ~700ms) */}
-            {!row.isYourBank && (
-              <div
-                className={`absolute top-4 right-3 pointer-events-none transition-all duration-200 ${
-                  stampLanded
-                    ? 'scale-100 rotate-[-8deg] opacity-100'
-                    : 'scale-160 rotate-0 opacity-0'
-                }`}
-              >
-                <div className="border-3 border-[#C23B22] text-[#C23B22] px-2 py-0.5 font-anton text-xs tracking-wider uppercase shadow-[0_0_0_1px_#000] bg-[#FFFDF7]/95">
-                  {ARRIVALS_COPY.stampLabel}
-                </div>
-              </div>
-            )}
-
-            {/* Headline */}
-            <div className="mb-3">
-              <span className="text-[9px] font-bold text-black/50 uppercase tracking-widest block">
-                HEADLINE
+            {/* 2. Institution & Status Chip */}
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <span className="font-plex font-bold text-xs sm:text-sm text-black truncate">
+                {row.institution}
               </span>
-              <div className="font-anton text-sm sm:text-base text-black leading-tight mt-0.5">
+              <span
+                className={`px-2 py-0.5 text-[10px] font-plex font-bold border uppercase shrink-0 ${getStatusStyle(
+                  row.status
+                )}`}
+              >
+                {row.status}
+              </span>
+            </div>
+
+            {/* 3. Headline (Anton) */}
+            <div className="mb-2">
+              <div className="font-anton text-sm sm:text-base text-black leading-tight uppercase">
                 {row.headline}
               </div>
             </div>
 
-            {/* Metadata Grid */}
-            <div className="border-t border-b border-dashed border-black/40 py-2 mb-3 text-[10px] grid grid-cols-2 gap-2">
-              <div>
-                <span className="text-[8px] text-black/50 uppercase block font-bold">
-                  {ARRIVALS_COPY.printer.institutionLabel}
-                </span>
-                <span className="font-bold text-black text-xs truncate block">
-                  {row.institution}
-                </span>
+            {/* 4. Details */}
+            {row.details && (
+              <div className="font-plex text-xs text-black/85 leading-relaxed mb-2.5">
+                {row.details}
               </div>
-              <div>
-                <span className="text-[8px] text-black/50 uppercase block font-bold">
-                  {ARRIVALS_COPY.printer.dateLabel}
-                </span>
-                <span className="text-black">{row.date}</span>
-              </div>
-              <div>
-                <span className="text-[8px] text-black/50 uppercase block font-bold">
-                  {ARRIVALS_COPY.printer.recordedByLabel}
-                </span>
-                <span className="text-black/80 truncate block">{row.sourceBy}</span>
-              </div>
-              <div>
-                <span className="text-[8px] text-black/50 uppercase block font-bold">
-                  {ARRIVALS_COPY.printer.typeLabel}
-                </span>
-                <span className="text-black/80 uppercase">{row.sourceType}</span>
-              </div>
-            </div>
+            )}
 
-            {/* Optional Screenshot Image */}
+            {/* 5. Caveat / Note: in Plex Mono with bronze bar on left and small NOTE label */}
+            {row.caveat && (
+              <div className="border-l-2 border-[#C97B1A] bg-[#C97B1A]/10 pl-2.5 py-1.5 pr-2 mb-2.5 text-[10px] sm:text-[11px] font-mono leading-snug text-black/85">
+                <span className="font-bold text-[#C97B1A] uppercase tracking-wider mr-1.5 text-[9px]">
+                  {ARRIVALS_COPY.printer.noteLabel}:
+                </span>
+                <span>{row.caveat}</span>
+              </div>
+            )}
+
+            {/* 6. Meta Line (posted by, source type) */}
+            {(row.sourceBy || row.sourceType) && (
+              <div className="border-t border-dashed border-black/30 pt-1.5 mb-2.5 text-[10px] font-plex text-black/70 flex items-center justify-between gap-2">
+                <span className="truncate">
+                  <span className="text-black/50 uppercase text-[8px] font-bold mr-1">{ARRIVALS_COPY.printer.recordedByLabel}:</span>
+                  <span className="text-black font-medium">{row.sourceBy}</span>
+                </span>
+                {row.sourceType && (
+                  <span className="shrink-0 uppercase text-[9px] bg-black/5 px-1.5 py-0.5 border border-black/20 text-black/80 font-bold">
+                    {row.sourceType}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Optional Screenshot Image (if any) */}
             {row.image && (
-              <div className="mb-3 bg-black/5 border border-black p-1 overflow-hidden">
+              <div className="mb-2.5 bg-black/5 border border-black p-1 overflow-hidden">
                 <img
                   src={row.image}
                   alt={`Screenshot for ${row.institution}`}
@@ -937,21 +1100,16 @@ const ReceiptPrinter = ({
               </div>
             )}
 
-            {/* Status Badge inside receipt */}
-            <div className="flex items-center justify-between mb-3 text-xs">
-              <span className="text-[9px] text-black/60 font-bold uppercase">STATUS:</span>
-              <span
-                className={`px-2 py-0.5 text-[10px] font-bold border uppercase ${getStatusStyle(
-                  row.status
-                )}`}
-              >
-                {row.status}
-              </span>
-            </div>
+            {/* 7. Buttons Row (VIEW ON X, ALSO READ) */}
+            {!hideButtons && !row.isYourBank && (
+              <div className="mt-2.5 mb-2">
+                <ReceiptButtonsRow row={row} isXLink={isXLink} isMobile={false} />
+              </div>
+            )}
 
-            {/* YOUR BANK special note or VIEW SOURCE button */}
-            {row.isYourBank ? (
-              <div className="bg-[#0E0D0C] text-[#E8DFC9] p-2.5 border border-black mt-2">
+            {/* Special note for YOUR BANK row */}
+            {row.isYourBank && (
+              <div className="bg-[#0E0D0C] text-[#E8DFC9] p-2.5 border border-black mt-2 mb-2">
                 <div className="text-[9px] text-[#F2B24A] font-bold uppercase tracking-wider mb-1">
                   {ARRIVALS_COPY.printer.yourBankNotice}
                 </div>
@@ -959,23 +1117,22 @@ const ReceiptPrinter = ({
                   {ARRIVALS_COPY.printer.yourBankDesc}
                 </p>
               </div>
-            ) : hasValidLink ? (
-              <a
-                href={row.source}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full inline-flex items-center justify-center gap-1.5 bg-[#F2B24A] hover:bg-[#ffc463] text-black font-plex font-bold text-xs uppercase py-2.5 px-3 border-2 border-black shadow-[3px_3px_0_#000] active:translate-y-0.5 transition-all min-h-[44px] cursor-pointer"
-              >
-                <span>
-                  {isXLink(row.source)
-                    ? ARRIVALS_COPY.buttonText.x
-                    : ARRIVALS_COPY.buttonText.source}
-                </span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            ) : (
-              <div className="text-center text-[10px] text-black/50 italic py-1">
-                {ARRIVALS_COPY.noSourceAvailable || 'Verified via Canton Ledger records.'}
+            )}
+
+            {/* 8. Red Stamp at bottom right: SOURCE ATTACHED (never covers text) */}
+            {!row.isYourBank && (
+              <div className="flex justify-end mt-2 mb-1">
+                <div
+                  className={`pointer-events-none transition-all duration-200 ${
+                    stampLanded
+                      ? 'scale-100 rotate-[-5deg] opacity-100'
+                      : 'scale-160 rotate-0 opacity-0'
+                  }`}
+                >
+                  <div className="border-2 sm:border-3 border-[#C23B22] text-[#C23B22] px-2 py-0.5 font-anton text-[11px] sm:text-xs tracking-wider uppercase shadow-[0_0_0_1px_#000] bg-[#FFFDF7]">
+                    {ARRIVALS_COPY.stampLabel}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1004,14 +1161,14 @@ const ReceiptPrinter = ({
             {/* Framed Title Plate */}
             <div className="w-full bg-[#181512] border-b border-[#C97B1A]/50 pb-1 mb-2">
               <span className="text-[9px] font-plex text-[#F2B24A] uppercase tracking-widest font-bold">
-                ★ VERDICT ★
+                ★ {UI_COPY.arrivals.verdictHeader} ★
               </span>
             </div>
 
             {/* Framed Image */}
             <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-none overflow-hidden border-2 border-[#F2B24A] bg-black shrink-0 p-0.5 shadow-[inset_0_0_8px_rgba(0,0,0,0.8)]">
               <img
-                src={row.isYourBank ? '/assets/bull-browraise.png' : '/assets/bull-smug.png'}
+                src={row.isYourBank ? '/assets/bull-browraise.webp' : '/assets/bull-smug.webp'}
                 alt="Bull reaction"
                 width={120}
                 height={120}
