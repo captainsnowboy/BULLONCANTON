@@ -13,6 +13,39 @@ app.get('/healthz', (_req, res) => {
   res.status(200).send('OK');
 });
 
+// Public Supanova proxy routes (no API key, no auth headers) to avoid browser CORS blocks
+app.get('/api/supanova/tokens/:slug', async (req, res) => {
+  const slug = encodeURIComponent(req.params.slug);
+  try {
+    const upstream = await fetch(`https://launch-api.supanova.app/api/v1/tokens/${slug}`, {
+      headers: { Accept: 'application/json' },
+    });
+    const body = await upstream.text();
+    res.status(upstream.status);
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=15');
+    res.send(body);
+  } catch {
+    res.status(502).json({ error: 'Upstream unavailable' });
+  }
+});
+
+app.get('/api/supanova/tokens/:slug/trades', async (req, res) => {
+  const slug = encodeURIComponent(req.params.slug);
+  try {
+    const upstream = await fetch(`https://launch-api.supanova.app/api/v1/tokens/${slug}/trades`, {
+      headers: { Accept: 'application/json' },
+    });
+    const body = await upstream.text();
+    res.status(upstream.status);
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=15');
+    res.send(body);
+  } catch {
+    res.status(502).json({ error: 'Upstream unavailable' });
+  }
+});
+
 // Serve static assets from dist directory with caching
 app.use(
   express.static(path.join(__dirname, 'dist'), {

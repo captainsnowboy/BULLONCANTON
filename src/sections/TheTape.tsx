@@ -224,7 +224,7 @@ export const TheTape: React.FC<TheTapeProps> = ({ state }) => {
               {trades.slice(0, 5).map((trade, idx) => {
                 const amount = formatTradeAmountCc(trade.amountCc);
                 const ago = formatRelativeTime(trade.timestamp, nowMs);
-                const safeHint = formatSafeTraderHint(trade.raw);
+                const safeHint = formatSafeTraderHint(trade.participantHint);
                 return (
                   <li
                     key={`${trade.side}-${amount}-${ago}-${idx}`}

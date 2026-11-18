@@ -131,6 +131,59 @@ export default defineConfig(() => {
           });
         },
       },
+      {
+        name: 'supanova-public-proxy',
+        configureServer(server) {
+          server.middlewares.use(async (req, res, next) => {
+            const urlPath = (req.url || '').split('?')[0];
+            const match = urlPath.match(/^\/api\/supanova\/tokens\/([a-zA-Z0-9_-]+)(\/trades)?$/);
+            if (!match) return next();
+
+            const slug = encodeURIComponent(match[1]);
+            const suffix = match[2] || '';
+            const targetUrl = `https://launch-api.supanova.app/api/v1/tokens/${slug}${suffix}`;
+            try {
+              const upstream = await fetch(targetUrl, {
+                headers: { Accept: 'application/json' },
+              });
+              const body = await upstream.text();
+              res.statusCode = upstream.status;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.setHeader('Cache-Control', 'public, max-age=15');
+              res.end(body);
+            } catch {
+              res.statusCode = 502;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ error: 'Upstream unavailable' }));
+            }
+          });
+        },
+        configurePreviewServer(server) {
+          server.middlewares.use(async (req, res, next) => {
+            const urlPath = (req.url || '').split('?')[0];
+            const match = urlPath.match(/^\/api\/supanova\/tokens\/([a-zA-Z0-9_-]+)(\/trades)?$/);
+            if (!match) return next();
+
+            const slug = encodeURIComponent(match[1]);
+            const suffix = match[2] || '';
+            const targetUrl = `https://launch-api.supanova.app/api/v1/tokens/${slug}${suffix}`;
+            try {
+              const upstream = await fetch(targetUrl, {
+                headers: { Accept: 'application/json' },
+              });
+              const body = await upstream.text();
+              res.statusCode = upstream.status;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.setHeader('Cache-Control', 'public, max-age=15');
+              res.end(body);
+            } catch {
+              res.statusCode = 502;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ error: 'Upstream unavailable' }));
+            }
+          });
+        },
+      },
     ],
     resolve: {
       alias: {

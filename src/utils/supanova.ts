@@ -28,7 +28,7 @@ export interface SupanovaTradeItem {
   side: string;
   amountCc: unknown;
   timestamp: unknown;
-  raw: Record<string, unknown>;
+  participantHint: string | null;
 }
 
 export interface SupanovaTapeState {
@@ -41,71 +41,63 @@ export interface SupanovaTapeState {
   asOfDate: Date | null;
 }
 
-function normalizeTokenResponse(payload: unknown): SupanovaTokenSnapshot | null {
+export function normalizeTokenResponse(payload: unknown): SupanovaTokenSnapshot | null {
   if (!payload || typeof payload !== 'object') return null;
   const root = payload as Record<string, unknown>;
-  const data =
-    root.data && typeof root.data === 'object'
+  const item =
+    root.item && typeof root.item === 'object'
+      ? (root.item as Record<string, unknown>)
+      : root.data && typeof root.data === 'object'
       ? (root.data as Record<string, unknown>)
-      : root.token && typeof root.token === 'object'
-      ? (root.token as Record<string, unknown>)
       : root;
 
-  const meta =
-    (root.meta as Record<string, unknown> | undefined) ??
-    (data.meta as Record<string, unknown> | undefined);
+  const meta = root.meta as Record<string, unknown> | undefined;
   const provenance = meta?.provenance as Record<string, unknown> | undefined;
-
-  const lp = data.launchProgress as Record<string, unknown> | undefined;
+  const lp = item.launchProgress as Record<string, unknown> | undefined;
 
   return {
-    price: data.price ?? null,
-    priceUsd: data.priceUsd ?? null,
-    change24h: data.change24h ?? null,
-    marketCapUsd: data.marketCapUsd ?? null,
-    marketCap: data.marketCap ?? null,
-    volume24h: data.volume24h ?? null,
-    tradeCount24h: data.tradeCount24h ?? null,
-    holders: data.holders ?? null,
-    holderChange24h: data.holderChange24h ?? null,
+    price: item.price ?? null,
+    priceUsd: item.priceUsd ?? null,
+    change24h: item.change24h ?? null,
+    marketCapUsd: item.marketCapUsd ?? null,
+    marketCap: item.marketCap ?? null,
+    volume24h: item.volume24h ?? null,
+    tradeCount24h: item.tradeCount24h ?? null,
+    holders: item.holders ?? null,
+    holderChange24h: item.holderChange24h ?? null,
     launchProgress: lp
       ? {
           graduationPercent: lp.graduationPercent ?? null,
           stage: lp.stage ?? null,
         }
       : null,
-    sparkline: Array.isArray(data.sparkline) ? data.sparkline : [],
+    sparkline: Array.isArray(item.sparkline) ? item.sparkline : [],
     asOf: provenance?.asOf ?? null,
   };
 }
 
-function normalizeTradesResponse(payload: unknown): SupanovaTradeItem[] {
+export function normalizeTradesResponse(payload: unknown): SupanovaTradeItem[] {
   let list: unknown[] = [];
   if (Array.isArray(payload)) {
     list = payload;
   } else if (payload && typeof payload === 'object') {
     const obj = payload as Record<string, unknown>;
-    if (Array.isArray(obj.trades)) list = obj.trades;
+    if (Array.isArray(obj.items)) list = obj.items;
+    else if (Array.isArray(obj.trades)) list = obj.trades;
     else if (Array.isArray(obj.data)) list = obj.data;
-    else if (Array.isArray(obj.items)) list = obj.items;
   }
 
   return list
     .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
     .slice(0, 5)
     .map((item) => {
-      const rawSide = String(item.side ?? item.type ?? item.action ?? 'BUY').trim().toUpperCase();
+      const rawSide = String(item.side ?? 'BUY').trim().toUpperCase();
       const side = rawSide === 'SELL' ? 'SELL' : 'BUY';
-      const amountCc =
-        item.ccAmount ??
-        item.amountCc ??
-        item.quoteAmount ??
-        item.amount ??
-        item.cc ??
-        item.totalCc ??
-        null;
-      const timestamp = item.timestamp ?? item.createdAt ?? item.executedAt ?? item.time ?? null;
-      return { side, amountCc, timestamp, raw: item };
+      const amountCc = item.notionalCc ?? item.amountCc ?? item.ccAmount ?? null;
+      const timestamp = item.occurredAt ?? item.timestamp ?? item.createdAt ?? null;
+      const participantHint =
+        typeof item.participantHint === 'string' ? item.participantHint : null;
+      return { side, amountCc, timestamp, participantHint };
     });
 }
 
@@ -128,6 +120,21 @@ function computeAsOfState(asOfRaw: unknown): { asOfDate: Date | null; isStale: b
   };
 }
 
+async function fetchPublicJson(primaryUrl: string, fallbackUrl: string): Promise<unknown | null> {
+  for (const url of [primaryUrl, fallbackUrl]) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) continue;
+      return await res.json();
+    } catch {
+      // Try next endpoint on network/CORS error
+    }
+  }
+  return null;
+}
+
 export function useSupanovaLiveData(): SupanovaTapeState {
   const isLive = Boolean(CBULL.isLive && typeof CBULL.tokenSlug === 'string' && CBULL.tokenSlug.trim().length > 0);
   const [token, setToken] = useState<SupanovaTokenSnapshot | null>(null);
@@ -145,8 +152,10 @@ export function useSupanovaLiveData(): SupanovaTapeState {
 
     let cancelled = false;
     const slug = encodeURIComponent(CBULL.tokenSlug.trim());
-    const tokenUrl = `${SUPANOVA_BASE_URL}/${slug}`;
-    const tradesUrl = `${SUPANOVA_BASE_URL}/${slug}/trades?limit=5`;
+    const proxyTokenUrl = `/api/supanova/tokens/${slug}`;
+    const directTokenUrl = `${SUPANOVA_BASE_URL}/${slug}`;
+    const proxyTradesUrl = `/api/supanova/tokens/${slug}/trades`;
+    const directTradesUrl = `${SUPANOVA_BASE_URL}/${slug}/trades`;
 
     const fetchLatest = async () => {
       if (cancelled || document.hidden || inFlightRef.current) return;
@@ -154,11 +163,9 @@ export function useSupanovaLiveData(): SupanovaTapeState {
       lastFetchAtRef.current = Date.now();
 
       try {
-        const tokenRes = await fetch(tokenUrl);
-        if (!tokenRes.ok) {
-          return;
-        }
-        const rawToken = await tokenRes.json();
+        const rawToken = await fetchPublicJson(proxyTokenUrl, directTokenUrl);
+        if (!rawToken || cancelled) return;
+
         const normalized = normalizeTokenResponse(rawToken);
         if (!normalized || cancelled) return;
 
@@ -166,16 +173,9 @@ export function useSupanovaLiveData(): SupanovaTapeState {
         setHasFirstSuccess(true);
 
         // Fetch last 5 trades independently; omit trades silently on failure
-        try {
-          const tradesRes = await fetch(tradesUrl);
-          if (tradesRes.ok) {
-            const rawTrades = await tradesRes.json();
-            if (!cancelled) {
-              setTrades(normalizeTradesResponse(rawTrades));
-            }
-          }
-        } catch {
-          // Omit trades silently on failure; keep last good if already populated or stay empty
+        const rawTrades = await fetchPublicJson(proxyTradesUrl, directTradesUrl);
+        if (rawTrades && !cancelled) {
+          setTrades(normalizeTradesResponse(rawTrades));
         }
       } catch {
         // First fetch failure hides section; subsequent refresh failure retains last good values

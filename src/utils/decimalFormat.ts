@@ -348,46 +348,24 @@ export function formatRelativeTime(isoOrTimestamp: unknown, nowMs: number): stri
 }
 
 /**
- * Extracts only a short display hint for a trade counterparty.
- * Never returns a full Canton Party ID (e.g. `alias::1220...`) or long hex string.
+ * Extracts only a short display hint from participantHint (first 12 chars + "…").
+ * Never reads or displays partyId.
  */
-export function formatSafeTraderHint(trade: Record<string, unknown>): string | null {
-  const candidates = [
-    trade.displayHint,
-    trade.traderDisplayHint,
-    trade.traderHint,
-    trade.handle,
-    trade.username,
-    trade.alias,
-    trade.partyHint,
-    trade.trader,
-    trade.maker,
-    trade.partyId,
-  ];
+export function formatSafeTraderHint(hintOrTrade: unknown): string | null {
+  const raw =
+    typeof hintOrTrade === 'string'
+      ? hintOrTrade
+      : hintOrTrade && typeof hintOrTrade === 'object'
+      ? (hintOrTrade as Record<string, unknown>).participantHint
+      : null;
 
-  for (const cand of candidates) {
-    if (typeof cand !== 'string') continue;
-    const trimmed = cand.trim();
-    if (!trimmed) continue;
-
-    // Canton Party IDs contain `::` followed by a long hex fingerprint — strip the fingerprint.
-    if (trimmed.includes('::')) {
-      const prefix = trimmed.split('::')[0].trim();
-      if (prefix && prefix.length <= 14 && !/^[0-9a-f]{12,}$/i.test(prefix)) {
-        return prefix;
-      }
-      return `${trimmed.slice(0, 4)}…${trimmed.slice(-4)}`;
-    }
-
-    // Any long token-like ID (>= 16 chars without spaces) must be shortened so no full ID ever renders.
-    if (trimmed.length >= 16 && !/\s/.test(trimmed)) {
-      return `${trimmed.slice(0, 4)}…${trimmed.slice(-4)}`;
-    }
-
-    return trimmed;
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.includes('::') || trimmed.toLowerCase().startsWith('supa1')) {
+    return null;
   }
 
-  return null;
+  return trimmed.length > 12 ? `${trimmed.slice(0, 12)}…` : trimmed;
 }
 
 export function buildSparklinePath(
