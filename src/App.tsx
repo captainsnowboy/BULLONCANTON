@@ -4,8 +4,10 @@ import { Charge } from './sections/Charge';
 import { OfficeScene } from './sections/OfficeScene';
 import { MemeDesk } from './sections/MemeDesk';
 import { Herd } from './sections/Herd';
+import { TheTape } from './sections/TheTape';
 import { Footer } from './components/Footer';
 import { Credits, startCreditsMusic } from './components/Credits';
+import { useSupanovaLiveData } from './utils/supanova';
 import { DebugHeightsPanel } from './components/DebugHeightsPanel';
 import { TickerTape } from './components/TickerTape';
 import { PlayButton } from './components/PlayButton';
@@ -25,6 +27,7 @@ export default function App() {
   );
   const wenIndexRef = useRef(0);
   const keyBufferRef = useRef('');
+  const tapeState = useSupanovaLiveData();
 
   useEffect(() => {
     const cleanupTapFx = initTapFx();
@@ -92,11 +95,13 @@ export default function App() {
         <OfficeScene />
         <MemeDesk />
         <Herd
+          liveHoldersCount={tapeState.liveHoldersFormatted}
           onOpenCredits={() => {
             startCreditsMusic();
             setIsCreditsOpen(true);
           }}
         />
+        <TheTape state={tapeState} />
         <Footer />
       </main>
 

@@ -3,7 +3,7 @@
  * All textual copy, one-liners, disclaimers, and ticker items.
  */
 
-import { TOKEN_TICKER } from './config.js';
+import { CBULL } from './config/cbull';
 
 export const SLOGAN = "THE BULLS ARE ONCHAIN.";
 export const TITLE = "BULL ON CANTON";
@@ -15,7 +15,7 @@ export const WEEKEND_BANNER = "WALL STREET IS CLOSED. BULL IS NOT.";
 // Hero plain labels
 export const HERO_COPY = {
   eyesOn: "Eyes on", eyesOff: "Eyes off", eyesToggleAria: "Toggle eye mode",
-  pinAria: "Lapel pin", bellAria: "Bell", orderSubmitted: "Not open yet."
+  pinAria: "Lapel pin", bellAria: "Bell", orderSubmitted: "On Supanova."
 };
 
 // Bull one-liners triggered on bull taps (grouped by hit region)
@@ -43,9 +43,10 @@ export const IDLE_WATCH_LINE = "Any day now.";
 
 // Buy button interactions
 export const BUY_BUTTON = {
-  label: `BUY ${TOKEN_TICKER}`, subtitle: "TAP TO BUY",
-  pendingStamp: "NOT OPEN YET",
-  notLiveText: "Not open yet. Follow on X to know when.",
+  label: `BUY ${CBULL.ticker}`,
+  subtitle: "TAP TO BUY",
+  pendingStamp: "SUPANOVA",
+  notLiveText: "Follow on X for updates.",
   notLiveLinkText: "Follow on X"
 };
 
@@ -240,7 +241,7 @@ export const MEME_DESK_COPY = {
     postX: "Post on X"
   },
   xNotice: "X can't attach the image for you. Save it, then add it to your post.",
-  xPrefillText: `The bulls are onchain. ${TOKEN_TICKER}`,
+  xPrefillText: `The bulls are onchain. ${CBULL.ticker}`,
   iosFallbackNotice: "Press and hold the image to save it.",
   iosSaveHint: "On iPhone: tap Download, then Save Image.",
   iosSaveSheetInstruction: "Press and hold the image, then tap Save to Photos.",
@@ -273,20 +274,14 @@ export const HERD_COPY = {
     telegramAria: "Open Telegram in a new tab"
   },
   address: {
-    label: "ADDRESS",
-    notLiveValue: "Not live yet",
-    copyButton: "Copy",
-    copiedButton: "Copied",
-    copyAria: "Copy address",
-    copyDisabledAria: "Copy address unavailable",
-    copiedLive: "Address copied",
-    copyFailedLive: "Could not copy address",
-    expandAria: "Show full address",
-    collapseAria: "Shorten address",
-    emptyNote: "We post it here and on X first.",
-    liveNotePrefix: "Match it with ",
-    liveNoteLink: "our X",
-    liveNoteSuffix: " before you buy."
+    label: "TOKEN ADDRESS",
+    copyButton: "COPY",
+    copiedButton: "COPIED",
+    copyAria: "Copy token address",
+    copiedLive: "Token address copied",
+    copyFailedLive: "Select the highlighted address to copy it",
+    viewOnSupanova: "View on Supanova",
+    safetyNote: "Buy only from this link. Anyone else is selling you a costume."
   }
 };
 
@@ -318,8 +313,8 @@ export const UI_COPY = {
     tapBullTitle: "Tap the bull"
   },
   buyTicket: {
-    header: "BUY TICKET",
-    buttonAria: "Buy Bull on Canton.",
+    header: "ORDER TICKET",
+    buttonAria: `Buy ${CBULL.ticker} on Supanova`,
     orderStatusAria: "Order Status",
     dismiss: "Dismiss"
   },
@@ -671,6 +666,32 @@ export const PLAY_COPY = {
     resetButton: "Reset"
   }
 };
+
+// =========================================================================
+// STAGE 6: THE TAPE (LIVE SUPANOVA ANALYTICS)
+// =========================================================================
+export const THE_TAPE_COPY = {
+  kicker: "MARKET DESK • LIVE FROM SUPANOVA",
+  heading: "THE TAPE",
+  tagline: "The bull has no comment. The tape does.",
+  stats: {
+    price: "PRICE",
+    change24h: "24H",
+    marketCap: "MARKET CAP",
+    volume24h: "VOLUME 24H",
+    herd: "THE HERD",
+    toGraduation: "TO GRADUATION"
+  },
+  tradesSuffix: "trades",
+  inOrbitStamp: "IN ORBIT — GRADUATED",
+  sparklineLabel: "TAPE LINE",
+  lastPrintsLabel: "LAST PRINTS",
+  asOfPrefix: "As of",
+  staleBadge: "STALE",
+  supanovaLink: "Full chart & trading on Supanova →",
+  missingValue: "—"
+};
+
 
 
 

@@ -1185,7 +1185,6 @@ export const Hero: React.FC = () => {
           <BuyButton
             onBuyTap={() => {
               emitNostrilSteam();
-              showSpeech(HERO_COPY.orderSubmitted, 4000);
             }}
           />
         </div>

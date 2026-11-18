@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { BUY_URL, X_URL } from '../config.js';
+import { X_URL } from '../config.js';
+import { CBULL } from '../config/cbull';
 import { BUY_BUTTON, UI_COPY } from '../copy.js';
 import { playSample } from '../utils/audio';
 import { isDesktopViewport } from '../utils/desktop';
@@ -15,7 +16,8 @@ export const BuyButton = ({ onBuyTap, compact = false } = {}) => {
   const shineTimerRef = useRef(null);
   const lastFeedbackMsRef = useRef(0);
 
-  const trimmedBuyUrl = typeof BUY_URL === 'string' ? BUY_URL.trim() : '';
+  const trimmedBuyUrl =
+    CBULL.isLive && typeof CBULL.buyUrl === 'string' ? CBULL.buyUrl.trim() : '';
   const hasValidBuyUrl = trimmedBuyUrl.startsWith('https://');
   const trimmedXUrl = typeof X_URL === 'string' ? X_URL.trim() : '';
   const followXHref = trimmedXUrl.startsWith('https://') ? trimmedXUrl : 'https://x.com';

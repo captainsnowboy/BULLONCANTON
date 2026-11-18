@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BuyButton } from '../components/BuyButton.jsx';
 import {
-  BUY_URL,
   SEASON,
   TELEGRAM_URL,
   TOKEN_TICKER,
   WEEKLY_CHALLENGE,
   X_URL,
 } from '../config.js';
+import { CBULL } from '../config/cbull';
 import { PLAY_COPY } from '../copy.js';
 import { BullRunEngine } from './engine';
 import { drawLocationPreview } from './locations';
@@ -319,7 +319,7 @@ export const Play: React.FC = () => {
   const activeTier: HerdTier | null = herdPass?.tier ?? null;
   const seasonOpen = isSeasonActive();
   const hasValidBuyUrl =
-    typeof BUY_URL === 'string' && BUY_URL.trim().startsWith('https://');
+    CBULL.isLive && typeof CBULL.buyUrl === 'string' && CBULL.buyUrl.trim().startsWith('https://');
   const hasTelegramUrl =
     typeof TELEGRAM_URL === 'string' && TELEGRAM_URL.trim().startsWith('https://');
   const hasXUrl = typeof X_URL === 'string' && X_URL.trim().startsWith('https://');

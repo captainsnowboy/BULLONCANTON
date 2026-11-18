@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BuyButton } from '../components/BuyButton';
-import { X_URL, TELEGRAM_URL, TOKEN_ADDRESS } from '../config.js';
+import { X_URL, TELEGRAM_URL } from '../config.js';
+import { CBULL } from '../config/cbull';
 import { HERD_COPY, CREDITS_COPY } from '../copy.js';
 import { playHoofThuds, playSample } from '../utils/audio';
 import { subscribeStampede } from '../utils/stampede';
@@ -36,6 +37,22 @@ const PaperPlaneIcon = () => (
     aria-hidden="true"
   >
     <path d="M21.5 3.5L2.5 11.2l6.2 2.3 2.4 6.5 3.1-3.5 4.8 3.5L21.5 3.5zM9.2 13.7l8.5-6.6-6.2 7.8-.4 2.9-1.9-4.1z" />
+  </svg>
+);
+
+const CopyIcon = () => (
+  <svg
+    viewBox="0 0 24 24"
+    className="w-3.5 h-3.5 shrink-0"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <rect x="9" y="9" width="13" height="13" rx="1" />
+    <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
   </svg>
 );
 
@@ -197,10 +214,10 @@ async function copyAddressText(text) {
 }
 
 const AddressTicketCard = () => {
-  const [isExpanded, setIsExpanded] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [liveMessage, setLiveMessage] = useState('');
   const copyTimerRef = useRef(null);
+  const addressTextRef = useRef(null);
 
   useEffect(() => {
     return () => {
@@ -208,19 +225,30 @@ const AddressTicketCard = () => {
     };
   }, []);
 
-  const trimmedAddress = typeof TOKEN_ADDRESS === 'string' ? TOKEN_ADDRESS.trim() : '';
-  const hasAddress = trimmedAddress !== '';
-  const trimmedXUrl = typeof X_URL === 'string' ? X_URL.trim() : '';
-  const hasXUrl = trimmedXUrl !== '';
+  const fullAddress = typeof CBULL.tokenAddress === 'string' ? CBULL.tokenAddress.trim() : '';
+  const hasAddress = fullAddress !== '';
+  const buyUrl = typeof CBULL.buyUrl === 'string' ? CBULL.buyUrl.trim() : '';
+  const hasBuyUrl = buyUrl.startsWith('https://');
 
-  const shortenedAddress =
-    trimmedAddress.length > 14
-      ? `${trimmedAddress.slice(0, 6)}...${trimmedAddress.slice(-6)}`
-      : trimmedAddress;
+  const selectAddressNode = () => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    const node = addressTextRef.current;
+    if (!node) return;
+    try {
+      const selection = window.getSelection();
+      if (!selection) return;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    } catch {
+      // Selection unavailable
+    }
+  };
 
   const handleCopy = async () => {
     if (!hasAddress) return;
-    const copied = await copyAddressText(trimmedAddress);
+    const copied = await copyAddressText(fullAddress);
     if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
 
     if (copied) {
@@ -230,13 +258,14 @@ const AddressTicketCard = () => {
         setIsCopied(false);
         setLiveMessage('');
         copyTimerRef.current = null;
-      }, 1500);
+      }, 2000);
     } else {
+      selectAddressNode();
       setLiveMessage(HERD_COPY.address.copyFailedLive);
       copyTimerRef.current = window.setTimeout(() => {
         setLiveMessage('');
         copyTimerRef.current = null;
-      }, 1500);
+      }, 2000);
     }
   };
 
@@ -247,91 +276,59 @@ const AddressTicketCard = () => {
       </div>
 
       <div className="flex items-center justify-between gap-2.5 min-h-[44px]">
-        {hasAddress ? (
-          <>
-            <button
-              type="button"
-              data-no-tapfx
-              onClick={() => setIsExpanded((prev) => !prev)}
-              aria-expanded={isExpanded}
-              aria-label={isExpanded ? HERD_COPY.address.collapseAria : HERD_COPY.address.expandAria}
-              className="sm:hidden flex-1 min-w-0 min-h-[44px] flex items-center text-left font-plex text-xs text-[#E8DFC9] hover:text-[#F2B24A] bg-transparent border-0 p-0 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#F2B24A]"
-            >
-              <span className={isExpanded ? 'break-all leading-snug' : 'tabular-nums whitespace-nowrap'}>
-                {isExpanded ? trimmedAddress : shortenedAddress}
-              </span>
-            </button>
+        <span
+          ref={addressTextRef}
+          data-testid="token-address-value"
+          className="flex-1 min-w-0 font-plex text-xs sm:text-[13px] text-[#E8DFC9] break-all leading-snug select-all"
+        >
+          {fullAddress}
+        </span>
 
-            <span className="hidden sm:block flex-1 min-w-0 font-plex text-[13px] text-[#E8DFC9] break-all leading-snug select-all">
-              {trimmedAddress}
-            </span>
-
-            <button
-              type="button"
-              data-no-tapfx
-              onClick={handleCopy}
-              aria-label={HERD_COPY.address.copyAria}
-              className={`shrink-0 min-h-[44px] min-w-[82px] px-3 inline-flex items-center justify-center font-plex text-xs font-bold uppercase tracking-wider border transition-colors cursor-pointer whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-[#F2B24A] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0E0D0C] ${
-                isCopied
-                  ? 'border-[#2FD27A] bg-[#2FD27A] text-[#0E0D0C]'
-                  : 'border-[#C97B1A] bg-[#171410] text-[#F2B24A] hover:bg-[#C97B1A] hover:text-black'
-              }`}
-            >
-              {isCopied ? HERD_COPY.address.copiedButton : HERD_COPY.address.copyButton}
-            </button>
-          </>
-        ) : (
-          <>
-            <span className="flex-1 min-w-0 font-plex text-xs sm:text-sm text-[#E8DFC9]/55 select-none">
-              {HERD_COPY.address.notLiveValue}
-            </span>
-
-            <button
-              type="button"
-              data-no-tapfx
-              disabled
-              aria-disabled="true"
-              aria-label={HERD_COPY.address.copyDisabledAria}
-              className="shrink-0 min-h-[44px] min-w-[82px] px-3 inline-flex items-center justify-center font-plex text-xs font-bold uppercase tracking-wider border border-[#C97B1A]/30 bg-[#171410] text-[#E8DFC9]/35 cursor-not-allowed whitespace-nowrap select-none"
-            >
-              {HERD_COPY.address.copyButton}
-            </button>
-          </>
-        )}
+        <button
+          type="button"
+          data-no-tapfx
+          onClick={handleCopy}
+          aria-label={HERD_COPY.address.copyAria}
+          className={`shrink-0 min-h-[44px] min-w-[88px] px-3 inline-flex items-center justify-center gap-1.5 font-plex text-xs font-bold uppercase tracking-wider border transition-colors cursor-pointer whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-[#F2B24A] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0E0D0C] ${
+            isCopied
+              ? 'border-[#2FD27A] bg-[#2FD27A] text-[#0E0D0C]'
+              : 'border-[#C97B1A] bg-[#171410] text-[#F2B24A] hover:bg-[#C97B1A] hover:text-black'
+          }`}
+        >
+          <CopyIcon />
+          <span>{isCopied ? HERD_COPY.address.copiedButton : HERD_COPY.address.copyButton}</span>
+        </button>
       </div>
 
       <span role="status" aria-live="polite" className="sr-only">
         {liveMessage}
       </span>
 
-      {hasAddress ? (
-        <p className="font-plex text-[11px] text-[#E8DFC9]/75 leading-snug m-0">
-          {HERD_COPY.address.liveNotePrefix}
-          {hasXUrl ? (
-            <a
-              href={trimmedXUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              data-no-tapfx
-              className="text-[#F2B24A] underline underline-offset-2 hover:text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#F2B24A]"
-            >
-              {HERD_COPY.address.liveNoteLink}
-            </a>
-          ) : (
-            HERD_COPY.address.liveNoteLink
-          )}
-          {HERD_COPY.address.liveNoteSuffix}
-        </p>
-      ) : (
-        <p className="font-plex text-[11px] text-[#E8DFC9]/65 leading-snug m-0">
-          {HERD_COPY.address.emptyNote}
-        </p>
+      {hasBuyUrl && (
+        <div className="pt-0.5">
+          <a
+            href={buyUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-no-tapfx
+            className="inline-block font-plex text-xs font-semibold text-[#F2B24A] underline underline-offset-2 hover:text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#F2B24A]"
+          >
+            {HERD_COPY.address.viewOnSupanova}
+          </a>
+        </div>
       )}
+
+      <p className="font-plex text-[11px] text-[#E8DFC9]/75 leading-snug m-0">
+        {HERD_COPY.address.safetyNote}
+      </p>
     </div>
   );
 };
 
-export const Herd = ({ onOpenCredits }) => {
+/**
+ * @param {{ onOpenCredits?: () => void; liveHoldersCount?: string | null }} props
+ */
+export const Herd = ({ onOpenCredits, liveHoldersCount = null }) => {
   const [herdSize, setHerdSize] = useState(0);
   const [isStampeding, setIsStampeding] = useState(false);
   const [stampedeBulls, setStampedeBulls] = useState([]);
@@ -614,14 +611,14 @@ export const Herd = ({ onOpenCredits }) => {
                   <span aria-hidden="true" className="text-[#C97B1A]">
                     ·
                   </span>
-                  <span className="text-[#F2B24A] tabular-nums">
+                  <span data-testid="herd-size-value" className="text-[#F2B24A] tabular-nums">
                     {HERD_COPY.herdSizePrefix}
-                    {herdSize}
+                    {liveHoldersCount !== null ? liveHoldersCount : herdSize}
                   </span>
                 </button>
                 <span role="status" aria-live="polite" className="sr-only">
                   {HERD_COPY.herdSizePrefix}
-                  {herdSize}
+                  {liveHoldersCount !== null ? liveHoldersCount : herdSize}
                 </span>
               </div>
             </div>

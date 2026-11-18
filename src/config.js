@@ -4,9 +4,7 @@
  * Update these constants to configure links and interactive modes.
  */
 
-// Target URL when Buy button charge reaches 100%. If empty (""), shows launch pending stamp.
-/** @type {string} */
-export const BUY_URL = "";
+// Live buy URL, token slug, and token address are defined in src/config/cbull.ts.
 
 // If true, loads bull-hero-nopupils.webp and renders live cursor/touch tracking pupils.
 // If false, subtly tilts and shifts the whole bull image with cursor parallax.
@@ -25,9 +23,7 @@ export const TOKEN_TICKER = "$CBULL";
 /** @type {string} */
 export const COIN_TEXT = "$QQQ";
 
-// Token address displayed in Join the Herd. Leave empty ("") until launched.
-/** @type {string} */
-export const TOKEN_ADDRESS = "";
+// Token address is defined in src/config/cbull.ts (CBULL.tokenAddress).
 
 // Receipts monitor last-updated date (YYYY-MM-DD). Change whenever arrivals.json changes.
 /** @type {string} */
