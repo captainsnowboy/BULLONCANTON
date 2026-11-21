@@ -5,6 +5,7 @@ import { OfficeScene } from './sections/OfficeScene';
 import { MemeDesk } from './sections/MemeDesk';
 import { Herd } from './sections/Herd';
 import { TheTape } from './sections/TheTape';
+import { TheTapeBot } from './sections/TheTapeBot';
 import { Footer } from './components/Footer';
 import { Credits, startCreditsMusic } from './components/Credits';
 import { useSupanovaLiveData } from './utils/supanova';
@@ -102,6 +103,7 @@ export default function App() {
           }}
         />
         <TheTape state={tapeState} />
+        <TheTapeBot />
         <Footer />
       </main>
 

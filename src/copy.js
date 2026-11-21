@@ -692,6 +692,164 @@ export const THE_TAPE_COPY = {
   missingValue: "—"
 };
 
+// =========================================================================
+// STAGE 7: THE TAPE, IN YOUR GROUP (STATIC TELEGRAM BOT SECTION)
+// =========================================================================
+export const THE_TAPE_BOT_COPY = {
+  kicker: "THE BOT • FREE FOR EVERY CANTON GROUP",
+  heading: "THE TAPE, IN YOUR GROUP",
+  standfirst:
+    "One bot answers every Canton memecoin question in your group chat — price, holders, the dev's record, who called it first. No commands to learn; drop a ticker and it answers.",
+  rows: [
+    {
+      id: "ask-anything",
+      title: "ASK ANYTHING",
+      summary: "Any coin, answered on the spot.",
+      entries: [
+        {
+          trigger: "$TICKER",
+          description:
+            "drop any ticker mid-conversation; the full card appears: price, market cap, holders, top holders, dev record, new money."
+        },
+        {
+          trigger: "Paste a Supanova or OnePump link",
+          description: "the same card, no command needed."
+        },
+        {
+          trigger: "/t TICKER",
+          description: "the full card on demand, with chart and a reload button."
+        }
+      ]
+    },
+    {
+      id: "calls-and-receipts",
+      title: "CALLS & RECEIPTS",
+      summary: "Every call tracked. Every win proven.",
+      entries: [
+        {
+          trigger: "First drop gets the call",
+          description: "the bot records who called the coin, and at what market cap."
+        },
+        {
+          trigger: "2x · 5x · 10x",
+          description: "when a call runs, the milestone alert replies under the original call."
+        },
+        {
+          trigger: "/lb",
+          description: "the group's caller leaderboard, ranked by results."
+        },
+        {
+          trigger: "/pnl TICKER",
+          description:
+            "the flex card: the giant multiple and the caller's face on it. Made to be screenshotted."
+        }
+      ]
+    },
+    {
+      id: "wallets",
+      title: "WALLETS",
+      summary: "See who holds what.",
+      entries: [
+        {
+          trigger: "/th TICKER",
+          description: "the full top-holder list."
+        },
+        {
+          trigger: "/w ADDRESS",
+          description: "any wallet's card: what it holds and how it is doing."
+        },
+        {
+          trigger: "/watch ADDRESS",
+          description:
+            "an alert when that wallet trades. (Public trades only — Canton keeps transfers private.)"
+        },
+        {
+          trigger: "/bubbles TICKER",
+          description: "the holder bubble map."
+        }
+      ]
+    },
+    {
+      id: "charts-and-lists",
+      title: "CHARTS & LISTS",
+      summary: "The market at a glance.",
+      entries: [
+        {
+          trigger: "/c TICKER",
+          description: "the candlestick chart, with your group's call marked on it."
+        },
+        {
+          trigger: "/top",
+          description: "the realised-profit leaders."
+        },
+        {
+          trigger: "/new",
+          description: "the latest launches, as they land."
+        },
+        {
+          trigger: "/tape",
+          description: "what is trending right now."
+        }
+      ]
+    },
+    {
+      id: "for-group-admins",
+      title: "FOR GROUP ADMINS",
+      summary: "Your coin, on autopilot.",
+      entries: [
+        {
+          trigger: "/setcoin TICKER",
+          description:
+            "pin your group's coin: its buys of $10 and up, and its graduation milestones, post here on their own."
+        },
+        {
+          trigger: "/alerts",
+          description:
+            "graduation runs, heating-up coins, and launches from creators who have graduated before."
+        },
+        {
+          trigger: "/settings",
+          description: "card density and alert controls, for admins."
+        }
+      ]
+    }
+  ],
+  teaserRow: {
+    title: "IN THE WORKSHOP",
+    line: "More functions are being built. The tape keeps shipping.",
+    stamp: "IN TRANSIT"
+  },
+  quickStart: {
+    heading: "USE IT IN 30 SECONDS",
+    steps: [
+      "Add @bulloncanton_buybot to your group.",
+      "Make it an admin, so it can see ticker drops.",
+      "Drop a $TICKER. That is the whole manual."
+    ],
+    primaryCta: {
+      label: "ADD THE BOT",
+      href: "https://t.me/bulloncanton_buybot?startgroup=true"
+    },
+    secondaryCta: {
+      label: "JOIN @THEBULL_TAPE",
+      href: "https://t.me/thebull_tape"
+    }
+  }
+};
+
+export const DESK_NAV_COPY = {
+  triggerLabel: "DESK",
+  navAria: "Desk menu",
+  items: [
+    { id: "play", label: "PLAY", href: "/play" },
+    { id: "tape", label: "THE TAPE", href: "/#tape" },
+    { id: "shipping", label: "THE BOT", href: "/#shipping" }
+  ]
+};
+
+
+
+
 
 
 
