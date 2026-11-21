@@ -698,8 +698,7 @@ export const THE_TAPE_COPY = {
 export const THE_TAPE_BOT_COPY = {
   kicker: "THE BOT • FREE FOR EVERY CANTON GROUP",
   heading: "THE TAPE, IN YOUR GROUP",
-  standfirst:
-    "One bot answers every Canton memecoin question in your group chat — price, holders, the dev's record, who called it first. No commands to learn; drop a ticker and it answers.",
+  standfirst: "THE BULL is all in one bot for degens on the Canton network",
   rows: [
     {
       id: "ask-anything",
@@ -843,7 +842,7 @@ export const DESK_NAV_COPY = {
   items: [
     { id: "play", label: "PLAY", href: "/play" },
     { id: "tape", label: "THE TAPE", href: "/#tape" },
-    { id: "shipping", label: "THE BOT", href: "/#shipping" }
+    { id: "bot", label: "THE BOT", href: "/#bot" }
   ]
 };
 

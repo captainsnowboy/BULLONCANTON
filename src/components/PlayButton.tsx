@@ -7,9 +7,9 @@ interface PlayButtonProps {
   isCreditsOpen: boolean;
 }
 
-type AnchorTargetId = 'tape' | 'shipping';
+type AnchorTargetId = 'tape' | 'bot';
 
-const VALID_ANCHORS = new Set<string>(['tape', 'shipping']);
+const VALID_ANCHORS = new Set<string>(['tape', 'bot']);
 
 function getCordButton(): HTMLElement | null {
   if (typeof document === 'undefined') return null;
@@ -193,7 +193,7 @@ export const PlayButton: React.FC<PlayButtonProps> = ({ isCreditsOpen }) => {
     return () => observer.disconnect();
   }, []);
 
-  // Handle arriving at /#tape or /#shipping (e.g. from /play) while respecting the light gate
+  // Handle arriving at /#tape or /#bot (e.g. from /play) while respecting the light gate
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -352,7 +352,7 @@ export const PlayButton: React.FC<PlayButtonProps> = ({ isCreditsOpen }) => {
       return;
     }
 
-    // Anchor items (/ #tape, / #shipping)
+    // Anchor items (/#tape, /#bot)
     if (typeof window !== 'undefined' && window.location.pathname !== '/') {
       return;
     }

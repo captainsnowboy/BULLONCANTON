@@ -10,7 +10,7 @@ export const TheTapeBot: React.FC = () => {
 
   return (
     <section
-      id="shipping"
+      id="bot"
       aria-label={THE_TAPE_BOT_COPY.heading}
       className="relative w-full bg-[#E8DFC9] text-[#0E0D0C] border-t-[3px] border-b-[3px] border-[#0E0D0C] -mt-[3px] px-4 sm:px-6 py-10 sm:py-14 z-20 overflow-x-clip"
     >
