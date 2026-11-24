@@ -699,6 +699,13 @@ export const THE_TAPE_BOT_COPY = {
   kicker: "THE BOT • FREE FOR EVERY CANTON GROUP",
   heading: "THE TAPE, IN YOUR GROUP",
   standfirst: "THE BULL is all in one bot for degens on the Canton network",
+  watchButton: "WATCH THE BOT AT WORK",
+  videoModal: {
+    dialogAria: "THE BULL bot showcase video",
+    closeAria: "Close video",
+    src: "/assets/the-bull-showcase.mp4",
+    poster: "/assets/the-bull-showcase-poster.jpg"
+  },
   rows: [
     {
       id: "ask-anything",
@@ -717,6 +724,25 @@ export const THE_TAPE_BOT_COPY = {
         {
           trigger: "/t TICKER",
           description: "the full card on demand, with chart and a reload button."
+        },
+        {
+          trigger: "/more TICKER",
+          description: "the deep dive: top holders, the dev's full record, the early buyers."
+        },
+        {
+          trigger: "One ticker, two launchpads",
+          description:
+            "if a ticker lives on both Supanova and OnePump, the bot asks which one you mean before it answers. No wrong cards."
+        },
+        {
+          trigger: "An ATH with receipts",
+          description:
+            "a high only counts when real trading reached it: real size and a crowd of trades behind it, never one lucky print."
+        },
+        {
+          trigger: "Beta launch, badged",
+          description:
+            "coins from Supanova's test period carry the badge on their card, so test-period numbers are never read as real market history."
         }
       ]
     },
@@ -736,6 +762,10 @@ export const THE_TAPE_BOT_COPY = {
         {
           trigger: "/lb",
           description: "the group's caller leaderboard, ranked by results."
+        },
+        {
+          trigger: "/calls",
+          description: "the group's last ten calls, each with its Now and its ATH."
         },
         {
           trigger: "/pnl TICKER",
@@ -778,8 +808,8 @@ export const THE_TAPE_BOT_COPY = {
           description: "the candlestick chart, with your group's call marked on it."
         },
         {
-          trigger: "/top",
-          description: "the realised-profit leaders."
+          trigger: "/top TICKER",
+          description: "a coin's top traders by realised profit."
         },
         {
           trigger: "/new",
@@ -788,6 +818,10 @@ export const THE_TAPE_BOT_COPY = {
         {
           trigger: "/tape",
           description: "what is trending right now."
+        },
+        {
+          trigger: "/today",
+          description: "today on Canton, at a glance."
         }
       ]
     },
@@ -799,7 +833,17 @@ export const THE_TAPE_BOT_COPY = {
         {
           trigger: "/setcoin TICKER",
           description:
-            "pin your group's coin: its buys of $10 and up, and its graduation milestones, post here on their own."
+            "pin your group's coin: its buys and its graduation milestones post here on their own."
+        },
+        {
+          trigger: "/settopic",
+          description:
+            "forum groups: bind the bot to one topic, and it answers there only."
+        },
+        {
+          trigger: "/fix TICKER",
+          description:
+            "shared ticker? Pin which launchpad's coin it means in this group."
         },
         {
           trigger: "/alerts",
@@ -808,7 +852,8 @@ export const THE_TAPE_BOT_COPY = {
         },
         {
           trigger: "/settings",
-          description: "card density and alert controls, for admins."
+          description:
+            "card density and alert controls, plus your group's own buy-alert style: minimum buy, emoji and GIF."
         }
       ]
     }
