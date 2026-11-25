@@ -18,16 +18,17 @@ export interface CreatorBuybackEntry {
 }
 
 // Verified baseline totals (baked in from the public Supanova record)
-export const BASELINE_BUYBACKS_CC = 4079;
-export const BASELINE_BUYBACKS_TOKENS = 9798360;
-export const BASELINE_WALLET_TOTAL_CC = 11108;
-export const BASELINE_WALLET_TOTAL_TOKENS = 31000090;
+export const BASELINE_BUYBACKS_CC = 4376;
+export const BASELINE_BUYBACKS_TOKENS = 10924029;
+export const BASELINE_WALLET_TOTAL_CC = 11405;
+export const BASELINE_WALLET_TOTAL_TOKENS = 32125758;
 
-// Latest verified baseline timestamp (2026-11-22 buyback) so historical trades in the
+// Latest verified baseline timestamp (2026-11-25 buyback) so historical trades in the
 // recent-100 window are never double-counted against the baked-in baseline.
-const BASELINE_CUTOFF_MS = Date.parse('2026-11-22T22:20:37.377Z');
+const BASELINE_CUTOFF_MS = Date.parse('2026-11-25T10:02:05.122Z');
 
 const BASELINE_KNOWN_REFS = new Set<string>([
+  'trade_ref_e6a7ed4c07ee483ba213205e3f7b0c25', // 2026-11-25 buyback
   'trade_ref_f33f1499bbc8f524c7d3be3352f2edf6', // 2026-11-22 buyback
   'trade_ref_0111262ad99c9f81448972ecb43fd15b', // 2026-11-21 buyback
 ]);
@@ -37,12 +38,21 @@ const BASELINE_KNOWN_REFS = new Set<string>([
  */
 export const VERIFIED_BASELINE_BUYBACKS: readonly CreatorBuybackEntry[] = [
   {
+    key: 'baseline-2026-11-25',
+    publicReference: 'trade_ref_e6a7ed4c07ee483ba213205e3f7b0c25',
+    occurredAtMs: Date.parse('2026-11-25T10:02:05.122Z'),
+    utcDate: '2026-11-25',
+    dateLabel: 'Nov 25',
+    cc: 297,
+    tokens: 1125668,
+  },
+  {
     key: 'baseline-2026-11-22',
     publicReference: 'trade_ref_f33f1499bbc8f524c7d3be3352f2edf6',
     occurredAtMs: Date.parse('2026-11-22T22:20:37.377Z'),
     utcDate: '2026-11-22',
     dateLabel: 'Nov 22',
-    cc: 238,
+    cc: 237.6,
     tokens: 847196,
   },
   {
@@ -204,10 +214,9 @@ export function extractLiveCreatorBuybacks(payload: unknown): CreatorBuybackEntr
     const side = String(item.side ?? '').trim().toLowerCase();
     if (side !== 'buy') continue;
 
-    // Creator wallet filter: isCreator === true OR partyId matches creator Party ID
-    const isCreator = item.isCreator === true;
+    // Creator wallet filter: match on creator Party ID ONLY (never use isCreator)
     const partyId = typeof item.partyId === 'string' ? item.partyId.trim() : '';
-    if (!isCreator && partyId !== CREATOR_PARTY_ID) continue;
+    if (partyId !== CREATOR_PARTY_ID) continue;
 
     const cc = parsePositiveNumber(item.notionalCc);
     const tokens = parsePositiveNumber(item.tokenAmount);
