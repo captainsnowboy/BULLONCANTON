@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CBULL } from '../config/cbull';
 import { THE_TAPE_COPY } from '../copy.js';
 import {
@@ -16,6 +16,12 @@ import {
   formatTradeAmountCc,
   formatWholeNumber,
 } from '../utils/decimalFormat';
+import {
+  computeBuybackSummary,
+  formatBuybackCc,
+  formatBuybackTokensExact,
+  formatBuybackTokensMillions,
+} from '../utils/creatorBuybacks';
 import type { SupanovaTapeState } from '../utils/supanova';
 
 interface TheTapeProps {
@@ -23,12 +29,19 @@ interface TheTapeProps {
 }
 
 export const TheTape: React.FC<TheTapeProps> = ({ state }) => {
+  const [isBuybacksOpen, setIsBuybacksOpen] = useState(false);
+
   if (!state.visible || !state.token) {
     return null;
   }
 
-  const { token, trades, liveHoldersFormatted, isStale, asOfDate } = state;
+  const { token, trades, liveCreatorBuybacks, liveHoldersFormatted, isStale, asOfDate } = state;
   const nowMs = Date.now();
+  const buybacks = computeBuybackSummary(liveCreatorBuybacks);
+  const walletTotalCcText = formatBuybackCc(buybacks.walletTotalCc);
+  const buybacksCcText = formatBuybackCc(buybacks.buybacksCc);
+  const buybacksTokensM = formatBuybackTokensMillions(buybacks.buybacksTokens);
+  const walletTotalTokensM = formatBuybackTokensMillions(buybacks.walletTotalTokens);
 
   const priceCc = formatPriceCc(token.price);
   const priceUsd = formatPriceUsd(token.priceUsd);
@@ -187,6 +200,101 @@ export const TheTape: React.FC<TheTapeProps> = ({ state }) => {
                 </svg>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Creator Buybacks Button + Inline Accordion Panel (buys only) */}
+        <div className="border-x-2 border-b-2 border-[#0E0D0C]">
+          <button
+            id="creator-buybacks-trigger"
+            type="button"
+            data-no-tapfx
+            aria-expanded={isBuybacksOpen}
+            aria-controls="creator-buybacks-panel"
+            onClick={() => setIsBuybacksOpen((prev) => !prev)}
+            className="w-full min-h-[48px] px-3.5 sm:px-5 py-3 bg-[#0E0D0C] text-[#C97B1A] hover:bg-[#1a1816] active:bg-[#0E0D0C] flex items-center justify-between gap-3 text-left font-plex text-[11px] sm:text-xs font-bold uppercase tracking-[0.16em] tabular-nums cursor-pointer transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C97B1A] focus-visible:ring-inset"
+          >
+            <span className="inline-flex items-center gap-2 min-w-0 leading-snug">
+              <span aria-hidden="true" className="shrink-0">
+                ♻️
+              </span>
+              <span className="break-words">
+                CREATOR BUYBACKS — {walletTotalCcText} CC BOUGHT · 0 SOLD
+              </span>
+            </span>
+            <span
+              aria-hidden="true"
+              className={`shrink-0 inline-flex items-center justify-center w-6 h-6 font-plex text-xl leading-none font-normal text-[#C97B1A] transition-transform duration-[250ms] ease-in-out motion-reduce:transition-none ${
+                isBuybacksOpen ? 'rotate-45' : 'rotate-0'
+              }`}
+            >
+              +
+            </span>
+          </button>
+
+          <div
+            id="creator-buybacks-panel"
+            role="region"
+            aria-labelledby="creator-buybacks-trigger"
+            aria-hidden={!isBuybacksOpen}
+            className={`grid bg-[#E8DFC9] text-[#0E0D0C] transition-[grid-template-rows,opacity] duration-[250ms] ease-in-out motion-reduce:transition-none ${
+              isBuybacksOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+            }`}
+          >
+            <div className="overflow-hidden">
+              <div
+                className={`border-t border-[#0E0D0C] px-3.5 sm:px-5 py-4 ${
+                  isBuybacksOpen ? 'visible' : 'invisible'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <p className="font-playfair italic text-sm text-[#0E0D0C] leading-snug">
+                    The creator wallet buys $CBULL back with trading fees — and has never sold.
+                  </p>
+                  <button
+                    type="button"
+                    data-no-tapfx
+                    aria-label="Close creator buybacks"
+                    onClick={() => setIsBuybacksOpen(false)}
+                    className="shrink-0 -mt-1 -mr-1 w-9 h-9 inline-flex items-center justify-center font-plex text-lg leading-none font-bold text-[#0E0D0C]/80 hover:text-[#0E0D0C] hover:bg-[#0E0D0C]/10 cursor-pointer transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0E0D0C]"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div className="border-y border-[#0E0D0C]/35 py-2.5 mb-3 flex flex-col sm:flex-row sm:flex-wrap sm:items-baseline gap-y-1 gap-x-6 font-plex text-xs sm:text-[13px] font-bold tabular-nums text-[#0E0D0C]">
+                  <div>
+                    Buybacks: {buybacksCcText} CC → {buybacksTokensM} $CBULL
+                  </div>
+                  <div>
+                    Wallet total: {walletTotalCcText} CC → {walletTotalTokensM} $CBULL · 0 sold
+                  </div>
+                </div>
+
+                <ul className="m-0 p-0 list-none divide-y divide-[#0E0D0C]/20 font-plex text-xs sm:text-[13px] tabular-nums text-[#0E0D0C]">
+                  {buybacks.rows.map((entry) => (
+                    <li key={entry.key} className="py-1.5 leading-snug">
+                      {entry.dateLabel} — {formatBuybackCc(entry.cc)} CC →{' '}
+                      {formatBuybackTokensExact(entry.tokens)} $CBULL
+                      {entry.isLaunch ? ' (launch)' : ''}
+                    </li>
+                  ))}
+                </ul>
+
+                <p className="mt-3 pt-2.5 border-t border-[#0E0D0C]/25 font-plex text-[11px] text-[#0E0D0C]/75">
+                  Verified on the public{' '}
+                  <a
+                    href={CBULL.buyUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold text-[#0E0D0C] underline underline-offset-4 hover:text-[#C23B22] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0E0D0C]"
+                  >
+                    Supanova record
+                  </a>
+                  .
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 

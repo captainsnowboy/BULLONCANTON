@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { CBULL } from '../config/cbull';
 import { formatWholeNumber } from './decimalFormat';
+import {
+  type CreatorBuybackEntry,
+  extractLiveCreatorBuybacks,
+  mergeCreatorBuybacks,
+} from './creatorBuybacks';
 
 const SUPANOVA_BASE_URL = 'https://launch-api.supanova.app/api/v1/tokens';
 const POLL_INTERVAL_MS = 60_000;
@@ -36,6 +41,7 @@ export interface SupanovaTapeState {
   visible: boolean;
   token: SupanovaTokenSnapshot | null;
   trades: SupanovaTradeItem[];
+  liveCreatorBuybacks: CreatorBuybackEntry[];
   liveHoldersFormatted: string | null;
   isStale: boolean;
   asOfDate: Date | null;
@@ -139,6 +145,7 @@ export function useSupanovaLiveData(): SupanovaTapeState {
   const isLive = Boolean(CBULL.isLive && typeof CBULL.tokenSlug === 'string' && CBULL.tokenSlug.trim().length > 0);
   const [token, setToken] = useState<SupanovaTokenSnapshot | null>(null);
   const [trades, setTrades] = useState<SupanovaTradeItem[]>([]);
+  const [liveCreatorBuybacks, setLiveCreatorBuybacks] = useState<CreatorBuybackEntry[]>([]);
   const [hasFirstSuccess, setHasFirstSuccess] = useState(false);
   const [, setStaleTick] = useState(0);
 
@@ -154,8 +161,8 @@ export function useSupanovaLiveData(): SupanovaTapeState {
     const slug = encodeURIComponent(CBULL.tokenSlug.trim());
     const proxyTokenUrl = `/api/supanova/tokens/${slug}`;
     const directTokenUrl = `${SUPANOVA_BASE_URL}/${slug}`;
-    const proxyTradesUrl = `/api/supanova/tokens/${slug}/trades`;
-    const directTradesUrl = `${SUPANOVA_BASE_URL}/${slug}/trades`;
+    const proxyTradesUrl = `/api/supanova/tokens/${slug}/trades?limit=100`;
+    const directTradesUrl = `${SUPANOVA_BASE_URL}/${slug}/trades?limit=100`;
 
     const fetchLatest = async () => {
       if (cancelled || document.hidden || inFlightRef.current) return;
@@ -172,10 +179,15 @@ export function useSupanovaLiveData(): SupanovaTapeState {
         setToken(normalized);
         setHasFirstSuccess(true);
 
-        // Fetch last 5 trades independently; omit trades silently on failure
+        // Fetch latest 100 public trades on the same 60s cadence for LAST PRINTS (top 5)
+        // and live CREATOR BUYBACKS (buys only). Retain last good state on failure.
         const rawTrades = await fetchPublicJson(proxyTradesUrl, directTradesUrl);
         if (rawTrades && !cancelled) {
           setTrades(normalizeTradesResponse(rawTrades));
+          const incomingBuybacks = extractLiveCreatorBuybacks(rawTrades);
+          if (incomingBuybacks.length > 0) {
+            setLiveCreatorBuybacks((prev) => mergeCreatorBuybacks(prev, incomingBuybacks));
+          }
         }
       } catch {
         // First fetch failure hides section; subsequent refresh failure retains last good values
@@ -222,6 +234,7 @@ export function useSupanovaLiveData(): SupanovaTapeState {
       visible: false,
       token: null,
       trades: [],
+      liveCreatorBuybacks: [],
       liveHoldersFormatted: null,
       isStale: false,
       asOfDate: null,
@@ -236,6 +249,7 @@ export function useSupanovaLiveData(): SupanovaTapeState {
     visible: true,
     token,
     trades,
+    liveCreatorBuybacks,
     liveHoldersFormatted,
     isStale,
     asOfDate,

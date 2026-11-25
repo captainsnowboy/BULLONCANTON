@@ -20,9 +20,19 @@ export default async function handler(req, res) {
     return;
   }
 
+  const rawLimitParam =
+    typeof req?.query?.limit === 'string'
+      ? req.query.limit
+      : typeof req?.url === 'string'
+      ? new URL(req.url, 'http://localhost').searchParams.get('limit')
+      : null;
+  const limitNum = rawLimitParam ? parseInt(rawLimitParam, 10) : NaN;
+  const limitQuery =
+    Number.isFinite(limitNum) && limitNum >= 1 && limitNum <= 100 ? `?limit=${limitNum}` : '';
+
   try {
     const upstream = await fetch(
-      `https://launch-api.supanova.app/api/v1/tokens/${encodeURIComponent(slug)}/trades`,
+      `https://launch-api.supanova.app/api/v1/tokens/${encodeURIComponent(slug)}/trades${limitQuery}`,
       { headers: { Accept: 'application/json' } }
     );
     const body = await upstream.text();

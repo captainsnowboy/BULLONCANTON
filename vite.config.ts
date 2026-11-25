@@ -135,13 +135,20 @@ export default defineConfig(() => {
         name: 'supanova-public-proxy',
         configureServer(server) {
           server.middlewares.use(async (req, res, next) => {
-            const urlPath = (req.url || '').split('?')[0];
+            const parsedUrl = new URL(req.url || '/', 'http://localhost');
+            const urlPath = parsedUrl.pathname;
             const match = urlPath.match(/^\/api\/supanova\/tokens\/([a-zA-Z0-9_-]+)(\/trades)?$/);
             if (!match) return next();
 
             const slug = encodeURIComponent(match[1]);
             const suffix = match[2] || '';
-            const targetUrl = `https://launch-api.supanova.app/api/v1/tokens/${slug}${suffix}`;
+            const rawLimit = parsedUrl.searchParams.get('limit');
+            const limitNum = rawLimit ? parseInt(rawLimit, 10) : NaN;
+            const limitQuery =
+              suffix === '/trades' && Number.isFinite(limitNum) && limitNum >= 1 && limitNum <= 100
+                ? `?limit=${limitNum}`
+                : '';
+            const targetUrl = `https://launch-api.supanova.app/api/v1/tokens/${slug}${suffix}${limitQuery}`;
             try {
               const upstream = await fetch(targetUrl, {
                 headers: { Accept: 'application/json' },
@@ -160,13 +167,20 @@ export default defineConfig(() => {
         },
         configurePreviewServer(server) {
           server.middlewares.use(async (req, res, next) => {
-            const urlPath = (req.url || '').split('?')[0];
+            const parsedUrl = new URL(req.url || '/', 'http://localhost');
+            const urlPath = parsedUrl.pathname;
             const match = urlPath.match(/^\/api\/supanova\/tokens\/([a-zA-Z0-9_-]+)(\/trades)?$/);
             if (!match) return next();
 
             const slug = encodeURIComponent(match[1]);
             const suffix = match[2] || '';
-            const targetUrl = `https://launch-api.supanova.app/api/v1/tokens/${slug}${suffix}`;
+            const rawLimit = parsedUrl.searchParams.get('limit');
+            const limitNum = rawLimit ? parseInt(rawLimit, 10) : NaN;
+            const limitQuery =
+              suffix === '/trades' && Number.isFinite(limitNum) && limitNum >= 1 && limitNum <= 100
+                ? `?limit=${limitNum}`
+                : '';
+            const targetUrl = `https://launch-api.supanova.app/api/v1/tokens/${slug}${suffix}${limitQuery}`;
             try {
               const upstream = await fetch(targetUrl, {
                 headers: { Accept: 'application/json' },

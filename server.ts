@@ -32,10 +32,16 @@ app.get('/api/supanova/tokens/:slug', async (req, res) => {
 
 app.get('/api/supanova/tokens/:slug/trades', async (req, res) => {
   const slug = encodeURIComponent(req.params.slug);
+  const rawLimit = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) : NaN;
+  const limitQuery =
+    Number.isFinite(rawLimit) && rawLimit >= 1 && rawLimit <= 100 ? `?limit=${rawLimit}` : '';
   try {
-    const upstream = await fetch(`https://launch-api.supanova.app/api/v1/tokens/${slug}/trades`, {
-      headers: { Accept: 'application/json' },
-    });
+    const upstream = await fetch(
+      `https://launch-api.supanova.app/api/v1/tokens/${slug}/trades${limitQuery}`,
+      {
+        headers: { Accept: 'application/json' },
+      }
+    );
     const body = await upstream.text();
     res.status(upstream.status);
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
