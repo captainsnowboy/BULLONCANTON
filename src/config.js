@@ -31,7 +31,7 @@ export const RECEIPTS_UPDATED = "2026-11-14";
 
 // Set to false to test the game; set back to true before publishing
 /** @type {boolean} */
-export const GAME_COMING_SOON = false;
+export const GAME_COMING_SOON = true;
 
 // Bull Run seasonal Herd Pass configuration
 /** @type {{ id: string; name: string; ends: string }} */
